@@ -493,6 +493,13 @@
         async function init() {
             await checkHealth();
             await loadTasks();
+            
+            // Auto-load Task 1 on page load
+            if (state.tasks && state.tasks.length > 0) {
+                await resetTask(1);
+                addLog('Task 1 loaded automatically', 'success');
+            }
+            
             addLog('System initialized', 'success');
             
             // Auto-refresh health every 10 seconds
