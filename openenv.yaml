@@ -1,0 +1,60 @@
+name: sql-investigation-env
+version: "0.1.0"
+description: >
+  An RL environment where AI agents debug and fix SQL queries given a database 
+  schema and business question. Features 3 tasks from syntax repair to complex 
+  business logic investigation.
+author: your-hf-username
+tags:
+  - sql
+  - debugging
+  - data-engineering
+  - real-world
+  - rl-environment
+
+action_space:
+  query:
+    type: string
+    description: "SQL query to execute"
+  task_id:
+    type: integer
+    description: "ID of the task (1-3)"
+
+observation_space:
+  schema_info:
+    type: string
+    description: "Database schema information"
+  business_question:
+    type: string
+    description: "The business question for the current task"
+  query_result:
+    type: string
+    description: "Result of executing the SQL query"
+  error_message:
+    type: string
+    description: "Error message if query execution failed"
+  reward:
+    type: float
+    description: "Reward score for this step"
+  done:
+    type: boolean
+    description: "Whether the episode has finished"
+  feedback:
+    type: string
+    description: "Human-readable feedback on query correctness"
+
+tasks:
+  - id: 1
+    difficulty: easy
+    name: "Syntax Repair"
+    description: "Fix a syntax error in a query that groups orders by country"
+  - id: 2
+    difficulty: medium
+    name: "Logic Fix"
+    description: "Fix a JOIN condition error that prevents correct customer spending calculation"
+  - id: 3
+    difficulty: hard
+    name: "Business Investigation"
+    description: "Fix GROUP BY scope and add missing filter conditions for category-level analysis"
+
+entrypoint: "uvicorn server.app:app --host 0.0.0.0 --port 7860"

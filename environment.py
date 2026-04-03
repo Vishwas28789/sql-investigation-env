@@ -1,0 +1,234 @@
+"""SQL Investigation OpenEnv environment."""
+
+import uuid
+import random
+from typing import Tuple
+
+from models import SQLAction, SQLObservation, SQLState
+from db import DatabaseManager
+from tasks import TASKS, get_task
+from grader import Grader
+
+
+class SQLInvestigationEnvironment:
+    """OpenEnv environment for SQL query debugging and optimization."""
+    
+    def __init__(self):
+        """Initialize the environment."""
+        self.db = DatabaseManager()
+        self.grader = Grader()
+        self.current_task = None
+        self.current_task_id = None
+        self.episode_id = ""
+        self.step_count = 0
+        self.max_steps = 10
+        self.done = False
+    
+    def reset(self, task_id: int = None) -> SQLObservation:
+        """
+        Reset the environment and start a new episode.
+        
+        Args:
+            task_id: Specific task to load. If None, picks a random task.
+            
+        Returns:
+            Initial SQLObservation with schema info and business question.
+        """
+        # Pick task: use provided task_id, or random if None
+        if task_id is not None:
+            self.current_task = get_task(task_id)
+            if not self.current_task:
+                # Invalid task_id, fallback to random
+                self.current_task = random.choice(TASKS)
+                self.current_task_id = self.current_task["id"]
+            else:
+                self.current_task_id = task_id
+        else:
+            # No task specified, pick random
+            self.current_task = random.choice(TASKS)
+            self.current_task_id = self.current_task["id"]
+        
+        # Safety check
+        if not self.current_task:
+            self.current_task = TASKS[0]
+            self.current_task_id = self.current_task["id"]
+        
+        # Reset database with fresh data
+        self.db.reset()
+        
+        # Reset environment state
+        self.episode_id = str(uuid.uuid4())
+        self.step_count = 0
+        self.done = False
+        
+        # Get schema info for observation
+        schema_info = self.db.get_schema_info()
+        
+        # Return initial observation
+        return SQLObservation(
+            schema_info=schema_info,
+            business_question=self.current_task["business_question"],
+            query_result=self.current_task["description"],
+            error_message="",
+            reward=0.0,
+            done=False,
+            feedback="Task loaded. Examine the schema and submit your SQL query."
+        )
+    
+    def step(self, action: SQLAction) -> Tuple[SQLObservation, float, bool, dict]:
+        """
+        Execute one step of the environment.
+        
+        Args:
+            action: SQLAction containing the query to execute
+            
+        Returns:
+            Tuple of (observation, reward, done, info_dict)
+        """
+        # Safety check: ensure current_task is initialized
+        if self.current_task is None:
+            error_obs = SQLObservation(
+                schema_info="",
+                business_question="",
+                query_result="",
+                error_message="No task initialized",
+                reward=0.0,
+                done=True,
+                feedback="Error: Reset the environment first with reset(task_id)"
+            )
+            return (error_obs, 0.0, True, {
+                "step": self.step_count,
+                "episode_id": self.episode_id,
+                "error": "No task initialized"
+            })
+        
+        # If already done, return terminal observation
+        if self.done:
+            return (
+                SQLObservation(
+                    schema_info="",
+                    business_question="",
+                    query_result="",
+                    error_message="Episode already finished",
+                    reward=0.0,
+                    done=True,
+                    feedback="Episode complete. Start a new episode with reset()"
+                ),
+                0.0,
+                True,
+                {"step": self.step_count, "episode_id": self.episode_id, "error": "Episode finished"}
+            )
+        
+        # Validate action.task_id - must match current task or be None
+        if action.task_id is not None and action.task_id != self.current_task_id:
+            # Task ID mismatch, use current task ID
+            action.task_id = self.current_task_id
+        
+        # Increment step counter
+        self.step_count += 1
+        
+        # Execute query
+        query_result, error = self.db.execute_query(action.query)
+        
+        # Grade the query using current_task["id"]
+        score = self.grader.grade(self.db, action.query, self.current_task["id"])
+        
+        # Convert query result to string for observation
+        result_str = self._format_query_result(query_result)
+        
+        # Calculate reward: use grader score directly with minimal step penalty
+        reward = score - (0.01 * self.step_count)
+        reward = max(-1.0, min(1.0, reward))  # Clamp between -1 and 1
+        
+        # Determine if episode is done
+        if score >= 0.9 or self.step_count >= self.max_steps:
+            self.done = True
+        
+        # Generate feedback
+        feedback = self.grader.get_feedback(score, error)
+        
+        # Get current schema info
+        schema_info = self.db.get_schema_info()
+        
+        # Build observation with all required fields
+        observation = SQLObservation(
+            schema_info=schema_info,
+            business_question=self.current_task["business_question"],
+            query_result=result_str,
+            error_message=error,
+            reward=reward,
+            done=self.done,
+            feedback=feedback
+        )
+        
+        # Build info dict with debugging context
+        info = {
+            "step": self.step_count,
+            "episode_id": self.episode_id,
+            "score": score,
+            "task_id": self.current_task["id"],
+            "current_task_id": self.current_task_id,
+            "max_steps": self.max_steps
+        }
+        
+        return (observation, reward, self.done, info)
+    
+    def state(self) -> SQLState:
+        """
+        Get the current state of the environment.
+        
+        Returns:
+            SQLState object representing current state.
+        """
+        # Safety checks for None task
+        task_id = self.current_task_id if self.current_task_id is not None else 0
+        task_desc = self.current_task["description"] if self.current_task else "No task loaded"
+        
+        return SQLState(
+            episode_id=self.episode_id,
+            step_count=self.step_count,
+            task_id=task_id,
+            current_task_description=task_desc,
+            max_steps=self.max_steps
+        )
+    
+    def _format_query_result(self, rows: list) -> str:
+        """
+        Format query result rows into a readable string.
+        
+        Args:
+            rows: List of sqlite3.Row objects
+            
+        Returns:
+            Formatted string representation of results.
+        """
+        if not rows:
+            return "(No results)"
+        
+        try:
+            # Get column names from first row
+            first_row = rows[0]
+            if isinstance(first_row, dict) or hasattr(first_row, 'keys'):
+                columns = list(first_row.keys())
+            else:
+                return f"({len(rows)} rows returned)"
+            
+            # Build header
+            lines = [" | ".join(str(col) for col in columns)]
+            lines.append("-" * len(lines[0]))
+            
+            # Add up to 10 rows
+            for i, row in enumerate(rows[:10]):
+                if isinstance(row, dict):
+                    values = [str(row[col]) for col in columns]
+                else:
+                    values = [str(val) for val in row]
+                lines.append(" | ".join(values))
+            
+            # Add truncation notice if needed
+            if len(rows) > 10:
+                lines.append(f"... ({len(rows) - 10} more rows)")
+            
+            return "\n".join(lines)
+        except Exception:
+            return f"({len(rows)} rows returned)"
