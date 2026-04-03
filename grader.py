@@ -14,11 +14,12 @@ class Grader:
         
         Scoring logic:
         - 1.0: Exact semantic match (same rows, any order)
-        - 0.7: ≥80% rows match
+        - 0.7: ≥80% rows match (partial credit)
         - 0.3: Query executes but <80% match
         - 0.0: Query fails or invalid task
         
         IMPORTANT: Compares RESULT OUTPUT, not query strings.
+        Column-name agnostic - compares by position, not column names.
         
         Args:
             db_manager: DatabaseManager instance with initialized database
@@ -42,57 +43,126 @@ class Grader:
             expected_rows, expected_error = db_manager.execute_query(expected_query)
             
             print(f"\n[GRADER] Task {task_id} - Agent Query:")
-            print(f"  Query: {agent_query[:100]}")
+            print(f"  Query: {agent_query[:120]}")
             print(f"  Rows returned: {len(agent_rows) if agent_rows and not agent_error else 0}")
             if agent_error:
                 print(f"  ERROR: {agent_error}")
             
             print(f"\n[GRADER] Task {task_id} - Expected Query:")
-            print(f"  Query: {expected_query[:100]}")
+            print(f"  Query: {expected_query[:120]}")
             print(f"  Rows returned: {len(expected_rows) if expected_rows and not expected_error else 0}")
             if expected_error:
                 print(f"  ERROR: {expected_error}")
             
             # If agent query fails, return 0.0
-            if agent_error or agent_rows is None:
-                print(f"[GRADER] Task {task_id}: Agent query FAILED → Score 0.0")
+            if agent_error or agent_rows is None or len(agent_rows) == 0:
+                print(f"[GRADER] Task {task_id}: Agent query FAILED or returned 0 rows → Score 0.0")
                 return 0.0
             
             # If expected query fails, cannot grade
-            if expected_error or expected_rows is None:
-                print(f"[GRADER] Task {task_id}: Expected query FAILED → Cannot grade")
+            if expected_error or expected_rows is None or len(expected_rows) == 0:
+                print(f"[GRADER] Task {task_id}: Expected query FAILED or returned 0 rows → Cannot grade")
                 return 0.0
             
-            # Normalize both result sets
-            agent_norm = self._normalize_simple(agent_rows)
-            expected_norm = self._normalize_simple(expected_rows)
+            # Normalize both result sets (column-position agnostic)
+            agent_norm = self._normalize_results(agent_rows)
+            expected_norm = self._normalize_results(expected_rows)
             
             print(f"\n[GRADER] Task {task_id} - Normalized Results:")
-            print(f"  Agent: {agent_norm}")
-            print(f"  Expected: {expected_norm}")
+            print(f"  Agent ({len(agent_norm)} rows): {agent_norm[:3] if len(agent_norm) > 0 else []}")
+            print(f"  Expected ({len(expected_norm)} rows): {expected_norm[:3] if len(expected_norm) > 0 else []}")
             
             # Check for EXACT MATCH
-            if agent_norm == expected_norm:
+            if set(agent_norm) == set(expected_norm):
                 print(f"[GRADER] Task {task_id}: EXACT MATCH → Score 1.0")
                 return 1.0
             
             # Calculate partial match
-            match_count = sum(1 for row in agent_norm if row in expected_norm)
-            total = len(expected_norm) if expected_norm else 1
+            agent_set = set(agent_norm)
+            expected_set = set(expected_norm)
+            matches = agent_set & expected_set  # Intersection
+            
+            match_count = len(matches)
+            total = len(expected_set) if expected_set else 1
             match_ratio = match_count / total
             
-            print(f"  Match ratio: {match_count}/{total} = {match_ratio:.1%}")
+            print(f"  Match: {match_count}/{total} rows = {match_ratio:.1%}")
             
             if match_ratio >= 0.8:
                 print(f"[GRADER] Task {task_id}: PARTIAL MATCH (≥80%) → Score 0.7")
                 return 0.7
+            elif match_ratio >= 0.5:
+                print(f"[GRADER] Task {task_id}: PARTIAL MATCH (50-79%) → Score 0.5")
+                return 0.5
             else:
-                print(f"[GRADER] Task {task_id}: LOW MATCH (<80%) → Score 0.3")
+                print(f"[GRADER] Task {task_id}: LOW MATCH (<50%) → Score 0.3")
                 return 0.3
                 
         except Exception as e:
             print(f"[GRADER] Task {task_id}: EXCEPTION - {type(e).__name__}: {str(e)}")
             return 0.0
+    
+    def _normalize_results(self, rows: list) -> list:
+        """
+        Normalize results for flexible comparison:
+        - Convert all values to strings
+        - Round floats to 2 decimal places
+        - Handle NULL values consistently
+        - Sort rows for order-independent comparison
+        
+        Args:
+            rows: List of row data (sqlite3.Row, dict, tuple, etc.)
+            
+        Returns:
+            Sorted list of normalized row tuples for comparison
+        """
+        if not rows:
+            return []
+        
+        normalized = []
+        for row in rows:
+            try:
+                # Extract values based on row type
+                if hasattr(row, 'keys') and callable(getattr(row, 'keys', None)):
+                    # sqlite3.Row or dict with keys() method
+                    # Extract values in order based on keys
+                    values = [row[key] for key in row.keys()]
+                elif isinstance(row, dict):
+                    # Plain dictionary - extract values
+                    values = list(row.values())
+                elif isinstance(row, (list, tuple)):
+                    # List/tuple: use as-is
+                    values = list(row)
+                else:
+                    # Unknown type: skip
+                    continue
+                
+                # Normalize each value
+                normalized_values = []
+                for v in values:
+                    # Handle None/NULL
+                    if v is None:
+                        normalized_values.append("NULL")
+                    # Handle floats - round to 2 decimals
+                    elif isinstance(v, float):
+                        normalized_values.append(f"{v:.2f}")
+                    # Handle integers
+                    elif isinstance(v, int):
+                        normalized_values.append(str(v))
+                    # Handle strings
+                    else:
+                        normalized_values.append(str(v).strip())
+                
+                # Convert to tuple for hashability
+                normalized.append(tuple(normalized_values))
+                
+            except Exception as e:
+                # Skip problematic rows
+                print(f"  [DEBUG] Skipped row due to error: {e}")
+                pass
+        
+        # Return sorted list (unique rows, order-independent)
+        return sorted(list(set(normalized)))
     
     def _normalize_simple(self, rows: list) -> list:
         """

@@ -20,17 +20,17 @@ GROUP BY customers.country"""
         "difficulty": "medium",
         "description": "Fix a JOIN condition error that prevents correct customer spending calculation",
         "business_question": "Find top 5 customers by total spending",
-        "broken_query": """SELECT c.name, SUM(o.amount) as total_spending 
+        "broken_query": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
-JOIN customers c ON o.id = c.id 
-GROUP BY c.id 
+JOIN customers c ON o.order_id = c.cust_id 
+GROUP BY c.cust_id 
 ORDER BY total_spending DESC 
 LIMIT 5""",
         "hint": "Review the JOIN condition. What column links orders to customers? It's not the order ID.",
-        "expected_query_template": """SELECT c.name, SUM(o.amount) as total_spending 
+        "expected_query_template": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
-JOIN customers c ON o.customer_id = c.id 
-GROUP BY c.id, c.name 
+JOIN customers c ON o.cust_id = c.cust_id 
+GROUP BY c.cust_id, c.customer_name 
 ORDER BY total_spending DESC 
 LIMIT 5"""
     },
@@ -39,18 +39,18 @@ LIMIT 5"""
         "difficulty": "hard",
         "description": "Fix GROUP BY scope and add missing filter conditions for category-level analysis",
         "business_question": "Find product categories where average order value exceeds 100 and at least 3 orders were placed",
-        "broken_query": """SELECT p.category, AVG(o.amount) as avg_order_value, COUNT(o.id) as order_count 
+        "broken_query": """SELECT p.product_category, AVG(o.total_amount) as avg_order_value, COUNT(o.order_id) as order_count 
 FROM orders o 
-JOIN order_items oi ON o.id = oi.order_id 
-JOIN products p ON oi.product_id = p.id 
-GROUP BY p.id""",
+JOIN order_items oi ON o.order_id = oi.order_id 
+JOIN products p ON oi.product_id = p.product_id 
+GROUP BY p.product_id""",
         "hint": "Two issues: 1) GROUP BY should be on category, not product ID. 2) You need a HAVING clause to filter groups by aggregated values (average > 100 and count >= 3).",
-        "expected_query_template": """SELECT p.category, AVG(o.amount) as avg_order_value, COUNT(o.id) as order_count 
+        "expected_query_template": """SELECT p.product_category, AVG(o.total_amount) as avg_order_value, COUNT(o.order_id) as order_count 
 FROM orders o 
-JOIN order_items oi ON o.id = oi.order_id 
-JOIN products p ON oi.product_id = p.id 
-GROUP BY p.category 
-HAVING AVG(o.amount) > 100 AND COUNT(o.id) >= 3 
+JOIN order_items oi ON o.order_id = oi.order_id 
+JOIN products p ON oi.product_id = p.product_id 
+GROUP BY p.product_category 
+HAVING AVG(o.total_amount) > 100 AND COUNT(o.order_id) >= 3 
 ORDER BY avg_order_value DESC"""
     }
 ]
