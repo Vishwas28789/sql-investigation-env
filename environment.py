@@ -13,12 +13,12 @@ from grader import Grader
 class SQLInvestigationEnvironment:
     """OpenEnv environment for SQL query debugging and optimization."""
     
-    def __init__(self):
-        """Initialize the environment."""
-        self.db = DatabaseManager()
+    def __init__(self, task_id: int = 1):
+        """Initialize the environment for a specific task."""
+        self.current_task_id = task_id
+        self.db = DatabaseManager(task_id=task_id)
         self.grader = Grader()
         self.current_task = None
-        self.current_task_id = None
         self.episode_id = ""
         self.step_count = 0
         self.max_steps = 10
@@ -29,32 +29,27 @@ class SQLInvestigationEnvironment:
         Reset the environment and start a new episode.
         
         Args:
-            task_id: Specific task to load. If None, picks a random task.
+            task_id: Specific task to load. If None, uses current task or defaults to 1.
             
         Returns:
             Initial SQLObservation with schema info and business question.
         """
-        # Pick task: use provided task_id, or random if None
+        # Update task_id if provided
         if task_id is not None:
-            self.current_task = get_task(task_id)
-            if not self.current_task:
-                # Invalid task_id, fallback to random
-                self.current_task = random.choice(TASKS)
-                self.current_task_id = self.current_task["id"]
-            else:
-                self.current_task_id = task_id
-        else:
-            # No task specified, pick random
-            self.current_task = random.choice(TASKS)
-            self.current_task_id = self.current_task["id"]
+            self.current_task_id = task_id
         
-        # Safety check
+        # If still no task_id, default to 1
+        if self.current_task_id is None:
+            self.current_task_id = 1
+        
+        # Get the task definition
+        self.current_task = get_task(self.current_task_id)
         if not self.current_task:
             self.current_task = TASKS[0]
             self.current_task_id = self.current_task["id"]
         
-        # Reset database with fresh data
-        self.db.reset()
+        # Recreate database with task-specific schema
+        self.db = DatabaseManager(task_id=self.current_task_id)
         
         # Reset environment state
         self.episode_id = str(uuid.uuid4())

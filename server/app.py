@@ -21,8 +21,17 @@ from grader import Grader
 from db import DatabaseManager
 
 
-# Initialize global environment instance
-environment = SQLInvestigationEnvironment()
+# Initialize per-task environments
+# This ensures each task has independent state with different database schemas
+task_environments: Dict[int, SQLInvestigationEnvironment] = {}
+
+def get_or_create_environment(task_id: int) -> SQLInvestigationEnvironment:
+    """Get or create an environment for a specific task with its own database schema."""
+    if task_id not in task_environments:
+        # Create new environment with task-specific database
+        task_environments[task_id] = SQLInvestigationEnvironment(task_id=task_id)
+    return task_environments[task_id]
+
 grader = Grader()
 
 # Create FastAPI app
@@ -106,9 +115,13 @@ class TaskSchema(BaseModel):
 # Endpoints
 @app.post("/reset", response_model=SQLObservation)
 async def reset_environment(request: ResetRequest):
-    """Reset the environment and start a new episode."""
+    """Reset the environment and start a new episode for a specific task."""
     try:
-        return environment.reset(task_id=request.task_id)
+        task_id = request.task_id if request.task_id else 1
+        # Get or create independent environment for this task
+        environment = get_or_create_environment(task_id)
+        # Reset the environment for this specific task
+        return environment.reset(task_id=task_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -117,6 +130,9 @@ async def reset_environment(request: ResetRequest):
 async def step_environment(request: StepRequest):
     """Execute one step in the environment."""
     try:
+        # Get the environment for this specific task
+        environment = get_or_create_environment(request.task_id)
+        
         action = SQLAction(query=request.query, task_id=request.task_id)
         observation, _, _, info = environment.step(action)
         # Return observation with all fields including reward, done, feedback
@@ -135,7 +151,14 @@ async def step_environment(request: StepRequest):
 async def get_state():
     """Get the current state of the environment."""
     try:
-        return environment.state()
+        # Return state from the most recently used environment
+        # Default to task 1 if no environment exists
+        if 1 in task_environments:
+            return task_environments[1].state()
+        else:
+            # Create a fresh environment for task 1
+            environment = get_or_create_environment(1)
+            return environment.state()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -178,7 +201,10 @@ async def grade_query(request: GraderRequest):
         if not task:
             raise HTTPException(status_code=404, detail=f"Task {request.task_id} not found")
         
-        # Grade the query
+        # Get the environment for this task to access the database
+        environment = get_or_create_environment(request.task_id)
+        
+        # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
         
         # Get feedback (use empty string for error since we're just grading)
@@ -212,11 +238,14 @@ async def run_baseline():
             task_id = task["id"]
             broken_query = task["broken_query"]
             
+            # Get or create environment for this specific task
+            environment = get_or_create_environment(task_id)
+            
             # Reset environment for this specific task
             # This ensures fresh database state for each task evaluation
             environment.reset(task_id=task_id)
             
-            # Grade the broken query using the fresh database
+            # Grade the broken query using the task-specific environment's fresh database
             score = grader.grade(environment.db, broken_query, task_id)
             
             # Store score with key task_1, task_2, task_3

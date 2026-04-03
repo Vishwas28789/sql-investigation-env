@@ -99,6 +99,9 @@
                             <button id="graderBtn" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg transition">
                                 Run Grader
                             </button>
+                            <button id="resetBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition">
+                                Reset Episode
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -258,7 +261,8 @@
         async function resetTask(taskId) {
             // Store task_id globally
             state.currentTaskId = taskId;
-            const taskName = state.tasks.find(t => t.id === taskId)?.difficulty || 'unknown';
+            const task = state.tasks.find(t => t.id === taskId);
+            const taskName = task ? task.difficulty : 'unknown';
             
             addLog(`Selecting Task ${taskId} (${taskName})`, 'success');
             
@@ -276,6 +280,32 @@
             document.getElementById('resultsContainer').innerHTML = '<p class="text-gray-400 text-sm">Submit a query to see results</p>';
             
             addLog(`Task ${taskId} loaded successfully`, 'success');
+        }
+
+        // ============ RESET EPISODE BUTTON ============
+        async function resetEpisode() {
+            if (state.currentTaskId === null || state.currentTaskId === undefined) {
+                addLog('Error: No task selected', 'error');
+                alert('⚠ Please select a task first');
+                return;
+            }
+
+            addLog(`Resetting Episode for Task ${state.currentTaskId}...`, 'success');
+            
+            const result = await apiCall('/reset', 'POST', { task_id: state.currentTaskId });
+            if (!result.ok) {
+                addLog(`Failed to reset episode`, 'error');
+                return;
+            }
+
+            state.currentObservation = result.data;
+            state.stepCount = 0;
+            
+            updateDisplay();
+            document.getElementById('queryEditor').value = '';
+            document.getElementById('resultsContainer').innerHTML = '<p class="text-gray-400 text-sm">Submit a query to see results</p>';
+            
+            addLog(`Episode reset for Task ${state.currentTaskId}`, 'success');
         }
 
         // ============ SUBMIT QUERY ============
@@ -504,6 +534,7 @@
         // ============ EVENT LISTENERS ============
         document.getElementById('submitBtn').addEventListener('click', submitQuery);
         document.getElementById('graderBtn').addEventListener('click', runGrader);
+        document.getElementById('resetBtn').addEventListener('click', resetEpisode);
         document.getElementById('baselineBtn').addEventListener('click', runBaseline);
 
         // ============ INITIALIZE ============
