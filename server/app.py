@@ -153,12 +153,18 @@ async def get_tasks():
                 business_question=task["business_question"],
                 hint=task["hint"],
                 action_schema={
-                    "query": "string",
-                    "task_id": "integer"
+                    "query": "string - SQL query to execute",
+                    "task_id": "integer - task ID (1, 2, or 3)"
                 }
             )
             task_list.append(task_schema)
-        return task_list
+        return {
+            "tasks": task_list,
+            "action_schema": {
+                "query": "string - SQL query to execute",
+                "task_id": "integer - task ID (1, 2, or 3)"
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -27,7 +27,7 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-API_BASE_URL = "http://localhost:7860"
+API_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
 
 # Model name - MUST be set via environment variable
 MODEL_NAME = os.getenv("MODEL_NAME")
@@ -466,13 +466,13 @@ if __name__ == "__main__":
         "--task-id",
         type=int,
         default=None,
-        help="Specific task ID to run (1, 2, or 3). If None, uses task 1."
+        help="Specific task ID to run (1, 2, or 3). If None, runs all 3 tasks in sequence."
     )
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=10,
-        help="Maximum steps per episode (default: 10)"
+        default=5,
+        help="Maximum steps per episode (default: 5)"
     )
     parser.add_argument(
         "--episodes",
@@ -493,9 +493,18 @@ if __name__ == "__main__":
     if args.api_url:
         API_BASE_URL = args.api_url
     
-    # Run inference
-    run_inference(
-        task_id=args.task_id,
-        max_steps=args.max_steps,
-        num_episodes=args.episodes
-    )
+    # If task_id is None, run all 3 tasks in sequence
+    if args.task_id is None:
+        for task_id in [1, 2, 3]:
+            run_inference(
+                task_id=task_id,
+                max_steps=args.max_steps,
+                num_episodes=args.episodes
+            )
+    else:
+        # Run single task
+        run_inference(
+            task_id=args.task_id,
+            max_steps=args.max_steps,
+            num_episodes=args.episodes
+        )

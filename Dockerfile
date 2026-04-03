@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY pyproject.toml .
-RUN pip install fastapi uvicorn pydantic python-multipart openai
+RUN pip install fastapi uvicorn pydantic python-multipart openai aiofiles requests
 
 COPY . .
 

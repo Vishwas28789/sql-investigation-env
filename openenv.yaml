@@ -4,11 +4,12 @@ description: >
   An RL environment where AI agents debug and fix SQL queries given a database 
   schema and business question. Features 3 tasks from syntax repair to complex 
   business logic investigation.
-author: your-hf-username
+author: vishwasmangapatnam
+sdk: docker
 tags:
+  - openenv
   - sql
   - debugging
-  - data-engineering
   - real-world
   - rl-environment
 
