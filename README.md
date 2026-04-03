@@ -1,3 +1,13 @@
+---
+title: SQL Investigation Environment
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_file: app.py
+pinned: false
+---
+
 # SQL Investigation OpenEnv
 
 **An RL environment where AI agents debug and fix SQL queries given a database schema and business question.**
