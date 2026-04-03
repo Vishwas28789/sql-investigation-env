@@ -176,7 +176,7 @@
                 };
                 if (body) options.body = JSON.stringify(body);
 
-                const response = await fetch(`http://localhost:7860${endpoint}`, options);
+                const response = await fetch(`${window.location.origin}${endpoint}`, options);
                 const data = await response.json();
                 
                 // Log with task_id context if present
