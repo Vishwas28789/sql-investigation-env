@@ -84,30 +84,56 @@ class Grader:
             print(f"  User: {len(user_normalized)} unique rows")
             print(f"  Expected: {len(expected_normalized)} unique rows")
             
-            # 5. CALCULATE MATCH SCORE
+            # 5. CALCULATE MATCH SCORE - IMPROVED TO HANDLE EXTRA/MISSING ROWS
             user_set = set(user_normalized)
             expected_set = set(expected_normalized)
             
             # Exact match
             if user_set == expected_set:
-                print(f"\n[RESULT] EXACT MATCH - All rows and columns match")
+                print(f"\n[RESULT] EXACT MATCH - All rows and columns match perfectly")
                 print(f"[SCORE] 1.0 (perfect)")
                 return 1.0
             
-            # Partial match via intersection
+            # Analyze differences
             matches = user_set & expected_set
+            extra_rows = user_set - expected_set  # User has these but shouldn't
+            missing_rows = expected_set - user_set  # User is missing these
+            
             match_count = len(matches)
             expected_count = len(expected_set)
+            user_count = len(user_set)
+            extra_count = len(extra_rows)
+            missing_count = len(missing_rows)
+            
+            print(f"\nDetailed Match Analysis:")
+            print(f"  Expected rows: {expected_count}")
+            print(f"  User returned: {user_count}")
+            print(f"  Matching rows: {match_count}")
+            print(f"  Extra rows: {extra_count} (user has but shouldn't)")
+            print(f"  Missing rows: {missing_count} (user is missing)")
+            
+            # Calculate match ratio and penalties
             match_ratio = match_count / expected_count if expected_count > 0 else 0
             
-            print(f"\nMatch Analysis:")
-            print(f"  Matching rows: {match_count}/{expected_count}")
-            print(f"  Match ratio: {match_ratio:.1%}")
+            # Penalty for extra rows (user returned too much)
+            extra_penalty = 0.0
+            if extra_count > 0:
+                # Each extra row reduces score by ~10% if it's a significant deviation
+                # E.g., expected 3 rows but got 10 = 7 extra = major penalty
+                extra_ratio = extra_count / expected_count if expected_count > 0 else 0
+                extra_penalty = min(0.5, extra_ratio * 0.3)  # Up to 50% penalty for too many extras
             
-            # Score based on ratio
+            print(f"  Match ratio: {match_ratio:.1%}")
+            print(f"  Extra penalty: {extra_penalty:.2f}")
+            
+            # Score based on corrected ratio accounting for failures
             score = self._calculate_score(match_ratio, user_set, expected_set)
             
-            print(f"\n[RESULT] Partial Match")
+            # Apply penalty for extra rows
+            if extra_count > 0:
+                score = max(0.0, score - extra_penalty)
+            
+            print(f"\n[RESULT] Partial Match (with extra/missing row analysis)")
             print(f"[SCORE] {score:.2f}")
             
             return score

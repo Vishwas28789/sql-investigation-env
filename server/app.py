@@ -85,6 +85,11 @@ class GraderResponse(BaseModel):
     feedback: str
 
 
+class ResetResponse(BaseModel):
+    observation: SQLObservation
+    episode_id: str
+
+
 class StepResponse(BaseModel):
     observation: SQLObservation
     reward: float
@@ -113,7 +118,7 @@ class TaskSchema(BaseModel):
 
 
 # Endpoints
-@app.post("/reset", response_model=SQLObservation)
+@app.post("/reset", response_model=ResetResponse)
 async def reset_environment(request: ResetRequest):
     """Reset the environment and start a new episode for a specific task."""
     try:
@@ -121,7 +126,11 @@ async def reset_environment(request: ResetRequest):
         # Get or create independent environment for this task
         environment = get_or_create_environment(task_id)
         # Reset the environment for this specific task
-        return environment.reset(task_id=task_id)
+        observation = environment.reset(task_id=task_id)
+        return ResetResponse(
+            observation=observation,
+            episode_id=environment.episode_id
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
