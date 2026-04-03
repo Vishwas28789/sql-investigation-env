@@ -209,13 +209,22 @@
         // ============ LOAD TASKS ============
         async function loadTasks() {
             const result = await apiCall('/tasks');
-            if (!result.ok) return;
+            if (!result.ok) {
+                addLog('Failed to load tasks', 'error');
+                return;
+            }
 
-            state.tasks = result.data;
+            // Extract tasks array from response
+            state.tasks = result.data.tasks || result.data;
             const container = document.getElementById('taskButtons');
             container.innerHTML = '';
 
-            result.data.forEach(task => {
+            if (!state.tasks || state.tasks.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 col-span-3">No tasks available</p>';
+                return;
+            }
+
+            state.tasks.forEach(task => {
                 const btn = document.createElement('button');
                 
                 let diffColor = 'text-green-300 bg-green-900 border-green-700';
@@ -223,7 +232,7 @@
                 if (task.difficulty === 'hard') diffColor = 'text-red-300 bg-red-900 border-red-700';
 
                 btn.innerHTML = `
-                    <div class="bg-gray-800 rounded-xl p-4 shadow-lg hover:bg-gray-700 transition text-left">
+                    <div class="bg-gray-800 rounded-xl p-4 shadow-lg hover:bg-gray-700 transition text-left cursor-pointer">
                         <div class="font-bold text-gray-100 mb-2">Task ${task.id}</div>
                         <div class="text-xs text-gray-400 mb-3">${task.business_question.substring(0, 50)}...</div>
                         <div class="text-xs font-semibold px-2 py-1 rounded border ${diffColor} inline-block">
@@ -233,8 +242,16 @@
                 `;
                 
                 btn.onclick = () => resetTask(task.id);
+                btn.style.cursor = 'pointer';
+                btn.style.border = 'none';
+                btn.style.background = 'transparent';
+                btn.style.padding = '0';
                 container.appendChild(btn);
             });
+            
+            // Debug log
+            console.log("Tasks loaded:", state.tasks);
+            addLog(`Loaded ${state.tasks.length} tasks`, 'success');
         }
 
         // ============ RESET TASK ============
