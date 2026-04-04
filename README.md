@@ -1,3 +1,12 @@
+---
+title: SQL Investigation Environment
+emoji: 🔍
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
 # SQL Investigation Environment
 
 **SQL Investigation OpenEnv — An OpenEnv RL environment for training agents to debug and fix SQL queries through execution-based feedback.**
