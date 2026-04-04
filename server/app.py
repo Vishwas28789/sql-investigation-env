@@ -123,16 +123,17 @@ async def reset_environment(request: ResetRequest):
     """Reset the environment and start a new episode for a specific task."""
     try:
         task_id = request.task_id if request.task_id else 1
-        print(f"\n[DEBUG /reset] Task ID: {task_id}")
+        print("START")
+        print(f"STEP: Resetting task {task_id}")
         
         # Get or create independent environment for this task
         environment = get_or_create_environment(task_id)
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
         
-        print(f"[DEBUG /reset] Schema length: {len(observation.schema_info)}")
-        print(f"[DEBUG /reset] Schema preview: {observation.schema_info[:100]}")
-        print(f"[DEBUG /reset] Question: {observation.business_question[:50]}")
+        print(f"STEP: Schema loaded ({len(observation.schema_info)} chars)")
+        print(f"STEP: Business question initialized")
+        print("END")
         
         return ResetResponse(
             observation=observation,
@@ -147,8 +148,8 @@ async def reset_environment(request: ResetRequest):
 async def step_environment(request: StepRequest):
     """Execute one step in the environment."""
     try:
-        print(f"\n[DEBUG /step] Task ID: {request.task_id}")
-        print(f"[DEBUG /step] Query: {request.query[:60]}...")
+        print("START")
+        print(f"STEP: Executing step for task {request.task_id}")
         
         # Get the environment for this specific task
         environment = get_or_create_environment(request.task_id)
@@ -156,8 +157,9 @@ async def step_environment(request: StepRequest):
         action = SQLAction(query=request.query, task_id=request.task_id)
         observation, _, _, info = environment.step(action)
         
-        print(f"[DEBUG /step] Reward: {observation.reward:.2f}")
-        print(f"[DEBUG /step] Done: {observation.done}")
+        print(f"STEP: Query executed. Reward: {observation.reward:.2f}")
+        print(f"STEP: Episode done: {observation.done}")
+        print("END")
         
         # Return observation with all fields including reward, done, feedback
         # Reward is taken ONLY from observation.reward (single source of truth)
@@ -221,8 +223,8 @@ async def get_tasks():
 async def grade_query(request: GraderRequest):
     """Grade a SQL query for a specific task."""
     try:
-        print(f"\n[DEBUG /grader] Task ID: {request.task_id}")
-        print(f"[DEBUG /grader] Query: {request.query[:60]}...")
+        print("START")
+        print(f"STEP: Grading query for task {request.task_id}")
         
         # Validate task exists
         task = get_task(request.task_id)
@@ -235,10 +237,11 @@ async def grade_query(request: GraderRequest):
         # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
         
-        print(f"[DEBUG /grader] Score: {score:.2f}")
+        print(f"STEP: Grade calculated: {score:.2f}")
         
         # Get feedback (use empty string for error since we're just grading)
         feedback = grader.get_feedback(score, "")
+        print("END")
         
         return GraderResponse(score=score, feedback=feedback)
     except HTTPException:
@@ -265,9 +268,14 @@ async def run_baseline():
         scores = {}
         
         # Evaluate each task's broken query (deterministic: task 1, 2, 3)
+        print("START")
+        print("STEP: Running baseline evaluation")
+        
+        # Evaluate each task's broken query (deterministic: task 1, 2, 3)
         for task in TASKS:
             task_id = task["id"]
             broken_query = task["broken_query"]
+            print(f"STEP: Evaluating Task {task_id}")
             
             # Get or create environment for this specific task
             environment = get_or_create_environment(task_id)
@@ -282,6 +290,8 @@ async def run_baseline():
             # Store score with key task_1, task_2, task_3
             task_key = f"task_{task_id}"
             scores[task_key] = score
+        
+        print("END")
         
         # Calculate average score (guaranteed to have exactly 3 scores)
         average_score = sum(scores.values()) / len(scores)

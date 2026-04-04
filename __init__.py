@@ -1,1 +1,0 @@
-"""SQL Investigation OpenEnv package."""

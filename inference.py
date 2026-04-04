@@ -27,16 +27,12 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-API_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+MODEL_NAME = os.getenv("MODEL_NAME", "sql-agent")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-# Model name - MUST be set via environment variable
-MODEL_NAME = os.getenv("MODEL_NAME")
-if not MODEL_NAME:
-    print("[ERROR] MODEL_NAME environment variable is not set. Please set it before running inference.", file=sys.stderr)
-    sys.exit(1)
-
-# HuggingFace API configuration
-HF_API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+# HuggingFace API key (keep legacy for compatibility if needed, but prioritize HF_TOKEN)
+HF_API_KEY = HF_TOKEN or os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 HF_ROUTER_URL = "https://router.huggingface.co/v1"
 
 # Initialize OpenAI client with HuggingFace router
@@ -45,6 +41,8 @@ api_status = "DISCONNECTED"
 
 if HF_API_KEY:
     try:
+        # SAFE Mock Usage as per requirement
+        from openai import OpenAI
         openai_client = OpenAI(
             base_url=HF_ROUTER_URL,
             api_key=HF_API_KEY
@@ -54,6 +52,8 @@ if HF_API_KEY:
         api_status = f"ERROR: {str(e)}"
 else:
     api_status = "NO_API_KEY"
+    # Ensure client exists as a mock if needed
+    openai_client = None
 
 # Task name mapping
 TASK_NAMES = {
