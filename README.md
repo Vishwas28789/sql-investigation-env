@@ -48,6 +48,7 @@ https://github.com/Vishwas28789/sql-investigation-env
 ---
 
 
+
 # SQL Investigation Environment
 
 **SQL Investigation OpenEnv — An OpenEnv RL environment for training agents to debug and fix SQL queries through execution-based feedback.**
