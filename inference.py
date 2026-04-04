@@ -450,8 +450,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         # Format rewards list: r1,r2,r3
         rewards_str = ",".join(format_reward(r) for r in rewards_list)
         
-        # Output: [END] success=<bool> steps=<n> rewards=<list>
-        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
+        # Output: [END] success=<bool> steps=<n> score=<...> rewards=<list>
+        print(f"[END] success={success_str} steps={step_count} score={format_reward(final_score)} rewards={rewards_str}")
 
 
 # ============ ENTRY POINT ============

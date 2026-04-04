@@ -22,8 +22,10 @@ GROUP BY customers.country"""
         "business_question": "Find top 5 customers by total spending",
         "broken_query": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
-JOIN customers c ON o.order_id = c.cust_id 
-GROUP BY c.cust_id""",
+JOIN customers c ON o.cust_id = c.cust_id 
+GROUP BY c.cust_id, c.customer_name 
+ORDER BY total_spending DESC 
+LIMIT 3""",
         "hint": "Review the JOIN condition. What column links orders to customers? It's not the order ID.",
         "expected_query_template": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
@@ -41,7 +43,7 @@ LIMIT 5"""
 FROM orders o 
 JOIN order_items oi ON o.order_id = oi.order_id 
 JOIN products p ON oi.product_id = p.product_id 
-GROUP BY p.product_id""",
+GROUP BY p.product_category""",
         "hint": "Two issues: 1) GROUP BY should be on category, not product ID. 2) You need a HAVING clause to filter groups by aggregated values (average > 100 and count >= 3).",
         "expected_query_template": """SELECT p.product_category, AVG(o.total_amount) as avg_order_value, COUNT(o.order_id) as order_count 
 FROM orders o 
