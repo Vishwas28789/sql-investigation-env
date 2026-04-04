@@ -7,6 +7,47 @@ sdk: docker
 pinned: false
 ---
 
+## Live Demo
+
+HuggingFace Space:
+https://vishwas004-sql-investigation-env.hf.space
+
+This environment allows users to interactively debug SQL queries across multiple tasks and receive execution-based feedback.
+
+---
+
+## Project Overview
+
+SQL Investigation Environment is an OpenEnv-compatible reinforcement learning environment designed to train agents to debug and correct SQL queries using execution-based reward signals.
+
+The system provides:
+- Task-specific database schemas
+- Natural language business problems
+- Deterministic grading based on query execution results
+- Smooth reward signals for reinforcement learning
+
+---
+
+## Key Features
+
+- Deterministic execution-based grading (no LLM dependency)
+- Task isolation with independent schemas per task
+- Partial reward system (0.2 to 1.0)
+- Real-time SQL execution and feedback
+- Fully reproducible evaluation environment
+
+---
+
+## Submission Details
+
+This project is submitted as part of the OpenEnv Hackathon.
+
+Repository:
+https://github.com/Vishwas28789/sql-investigation-env
+
+---
+
+
 # SQL Investigation Environment
 
 **SQL Investigation OpenEnv — An OpenEnv RL environment for training agents to debug and fix SQL queries through execution-based feedback.**
