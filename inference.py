@@ -347,12 +347,9 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             continue
         
         # Extract schema and business question
-        schema_info = reset_data.get("schema_info", "") if reset_data else ""
-        business_question = reset_data.get("business_question", "") if reset_data else ""
-        
-        # Get current state
-        _, state_data, _ = http_request("GET", "/state")
-        current_task_id = state_data.get("task_id", task_id) if state_data else task_id
+        schema_info = reset_data.get("observation", {}).get("schema_info", "")
+        business_question = reset_data.get("observation", {}).get("business_question", "")
+        episode_id = reset_data.get("episode_id", "unknown")
         
         # Track metrics
         rewards_list = []
@@ -384,7 +381,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
                 "/step",
                 {
                     "query": action_query,
-                    "task_id": current_task_id
+                    "task_id": episode_task_id
                 }
             )
             
