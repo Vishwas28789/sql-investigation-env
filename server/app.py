@@ -123,15 +123,23 @@ async def reset_environment(request: ResetRequest):
     """Reset the environment and start a new episode for a specific task."""
     try:
         task_id = request.task_id if request.task_id else 1
+        print(f"\n[DEBUG /reset] Task ID: {task_id}")
+        
         # Get or create independent environment for this task
         environment = get_or_create_environment(task_id)
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
+        
+        print(f"[DEBUG /reset] Schema length: {len(observation.schema_info)}")
+        print(f"[DEBUG /reset] Schema preview: {observation.schema_info[:100]}")
+        print(f"[DEBUG /reset] Question: {observation.business_question[:50]}")
+        
         return ResetResponse(
             observation=observation,
             episode_id=environment.episode_id
         )
     except Exception as e:
+        print(f"[ERROR /reset] {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -139,11 +147,18 @@ async def reset_environment(request: ResetRequest):
 async def step_environment(request: StepRequest):
     """Execute one step in the environment."""
     try:
+        print(f"\n[DEBUG /step] Task ID: {request.task_id}")
+        print(f"[DEBUG /step] Query: {request.query[:60]}...")
+        
         # Get the environment for this specific task
         environment = get_or_create_environment(request.task_id)
         
         action = SQLAction(query=request.query, task_id=request.task_id)
         observation, _, _, info = environment.step(action)
+        
+        print(f"[DEBUG /step] Reward: {observation.reward:.2f}")
+        print(f"[DEBUG /step] Done: {observation.done}")
+        
         # Return observation with all fields including reward, done, feedback
         # Reward is taken ONLY from observation.reward (single source of truth)
         return StepResponse(
@@ -153,6 +168,7 @@ async def step_environment(request: StepRequest):
             info=info
         )
     except Exception as e:
+        print(f"[ERROR /step] {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -205,6 +221,9 @@ async def get_tasks():
 async def grade_query(request: GraderRequest):
     """Grade a SQL query for a specific task."""
     try:
+        print(f"\n[DEBUG /grader] Task ID: {request.task_id}")
+        print(f"[DEBUG /grader] Query: {request.query[:60]}...")
+        
         # Validate task exists
         task = get_task(request.task_id)
         if not task:
@@ -216,6 +235,8 @@ async def grade_query(request: GraderRequest):
         # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
         
+        print(f"[DEBUG /grader] Score: {score:.2f}")
+        
         # Get feedback (use empty string for error since we're just grading)
         feedback = grader.get_feedback(score, "")
         
@@ -223,6 +244,7 @@ async def grade_query(request: GraderRequest):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR /grader] {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

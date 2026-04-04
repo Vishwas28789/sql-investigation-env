@@ -265,6 +265,7 @@
             const taskName = task ? task.difficulty : 'unknown';
             
             addLog(`Selecting Task ${taskId} (${taskName})`, 'success');
+            console.log("[DEBUG resetTask] Before reset - state:", state);
             
             const result = await apiCall('/reset', 'POST', { task_id: taskId });
             if (!result.ok) {
@@ -272,9 +273,18 @@
                 return;
             }
 
-            state.currentObservation = result.data;
+            console.log("[DEBUG resetTask] API Response:", result.data);
+            
+            // FIX: Extract observation from nested response structure
+            if (result.data.observation) {
+                state.currentObservation = result.data.observation;
+            } else {
+                state.currentObservation = result.data;
+            }
+            
             state.stepCount = 0;
             
+            console.log("[DEBUG resetTask] Current observation:", state.currentObservation);
             updateDisplay();
             document.getElementById('queryEditor').value = '';
             document.getElementById('resultsContainer').innerHTML = '<p class="text-gray-400 text-sm">Submit a query to see results</p>';
@@ -298,7 +308,13 @@
                 return;
             }
 
-            state.currentObservation = result.data;
+            // FIX: Extract observation from nested response structure
+            if (result.data.observation) {
+                state.currentObservation = result.data.observation;
+            } else {
+                state.currentObservation = result.data;
+            }
+            
             state.stepCount = 0;
             
             updateDisplay();
