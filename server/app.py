@@ -7,7 +7,7 @@ from pathlib import Path
 # Add parent directory to path to handle imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -119,10 +119,16 @@ class TaskSchema(BaseModel):
 
 # Endpoints
 @app.post("/reset", response_model=ResetResponse)
-async def reset_environment(request: ResetRequest):
+async def reset_environment(request: dict = Body(default={})):
     """Reset the environment and start a new episode for a specific task."""
     try:
-        task_id = request.task_id if request.task_id else 1
+        # Safely extract task_id from dictionary, default to 1
+        raw_task_id = request.get("task_id", 1)
+        try:
+            task_id = int(raw_task_id) if raw_task_id else 1
+        except (ValueError, TypeError):
+            task_id = 1
+            
         print("START")
         print(f"STEP: Resetting task {task_id}")
         
@@ -145,16 +151,24 @@ async def reset_environment(request: ResetRequest):
 
 
 @app.post("/step", response_model=StepResponse)
-async def step_environment(request: StepRequest):
+async def step_environment(request: dict = Body(default={})):
     """Execute one step in the environment."""
     try:
+        # Safely extract values from dictionary
+        query = request.get("query", "")
+        raw_task_id = request.get("task_id", 1)
+        try:
+            task_id = int(raw_task_id) if raw_task_id else 1
+        except (ValueError, TypeError):
+            task_id = 1
+            
         print("START")
-        print(f"STEP: Executing step for task {request.task_id}")
+        print(f"STEP: Executing step for task {task_id}")
         
         # Get the environment for this specific task
-        environment = get_or_create_environment(request.task_id)
+        environment = get_or_create_environment(task_id)
         
-        action = SQLAction(query=request.query, task_id=request.task_id)
+        action = SQLAction(query=query, task_id=task_id)
         observation, _, _, info = environment.step(action)
         
         print(f"STEP: Query executed. Reward: {observation.reward:.2f}")
@@ -162,7 +176,6 @@ async def step_environment(request: StepRequest):
         print("END")
         
         # Return observation with all fields including reward, done, feedback
-        # Reward is taken ONLY from observation.reward (single source of truth)
         return StepResponse(
             observation=observation,
             reward=observation.reward,
