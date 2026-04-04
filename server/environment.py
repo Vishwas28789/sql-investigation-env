@@ -43,8 +43,10 @@ class SQLInvestigationEnvironment:
             else:
                 self.current_task = TASKS[0]
         
-        # Reset database and environment state
-        self.db.reset()
+        # Recreate database manager for this specific task (fresh schema)
+        self.db = DatabaseManager(task_id=self.current_task["id"])
+        
+        # Reset environment state
         self.episode_id = str(uuid.uuid4())
         self.step_count = 0
         self.done = False
