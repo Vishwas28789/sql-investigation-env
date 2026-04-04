@@ -1,360 +1,179 @@
----
-title: SQL Investigation Environment
-emoji: 🧠
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_file: app.py
-pinned: false
----
+# SQL Investigation Environment
 
-# SQL Investigation OpenEnv
+**SQL Investigation OpenEnv — An OpenEnv RL environment for training agents to debug and fix SQL queries through execution-based feedback.**
 
-**An RL environment where AI agents debug and fix SQL queries given a database schema and business question.**
+## Why This Matters
 
----
+SQL errors cost engineering teams millions in debugging time annually. No existing OpenEnv environment targets structured query reasoning with execution-based feedback. This environment provides deterministic, reproducible reward signals independent of external LLMs—directly trainable with TRL, GRPO, or any policy gradient framework. Agents learn to navigate schema constraints, compose joins correctly, and derive business logic from natural language specifications.
 
-## Motivation
+## Environment Overview
 
-SQL query optimization and debugging is a critical real-world problem in data engineering and analytics. Agents that can:
-- Understand database schemas and relationships
-- Parse natural language business questions
-- Generate and iteratively refine SQL queries
-- Identify and fix common SQL errors (syntax, logic, aggregation)
+**SQL Investigation** is a fixed-task RL environment with three difficulty-scaled SQL debugging challenges. Agents observe a database schema and natural language business question, then iteratively submit SQL queries. The environment executes each query against an in-memory SQLite database, compares results against ground truth (row-sorted, float-tolerant at 2 decimal places), and returns execution-based reward signals.
 
-...represent valuable AI capabilities for automating data analysis workflows. This environment provides a controlled sandbox for training and evaluating agents on SQL debugging tasks ranging from simple syntax repair to complex business logic investigation.
+**Observation:** Schema information, business question, query execution result or error message, step count.
 
----
+**Action:** SQL query string + task identifier.
 
-## Environment Description
+**Reward Calculation:** Smooth curve: `0.2 + (match_ratio × 0.8) - extra_row_penalty`. Syntax errors yield 0.0; valid query execution with zero correct rows yields 0.2 minimum.
 
-**SQL Investigation** is a Gym-compatible RL environment featuring an in-memory SQLite database with realistic e-commerce data (customers, orders, products, order_items). 
-
-Agents interact with the environment by:
-1. Observing the database schema and a business question
-2. Submitting SQL queries as actions
-3. Receiving query results, correctness scores, and detailed feedback
-4. Iteratively refining queries until they match expected results or reach the step limit
-
-The environment includes 3 carefully designed tasks spanning difficulty levels: easy (syntax repair), medium (JOIN logic fixes), and hard (complex aggregation and filtering).
-
----
+**Termination:** Episode ends when score ≥ 0.9 or max_steps (10) reached.
 
 ## Action Space
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `query` | string | SQL query to execute against the database |
-| `task_id` | integer | ID of the current task (1-3) |
-
----
+| `query` | string | SQL query to execute against task-specific database |
+| `task_id` | integer | Task identifier (1, 2, or 3) |
 
 ## Observation Space
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_info` | string | Full database schema with all tables and columns |
-| `business_question` | string | Natural language description of the task goal |
-| `query_result` | string | Formatted results or error from executing the query |
-| `error_message` | string | SQL execution error message (empty if successful) |
-| `reward` | float | Reward score for the current step |
-| `done` | boolean | Whether the episode has finished |
-| `feedback` | string | Human-readable feedback on query correctness |
-
----
-
-## Tasks
-
-| ID | Name | Difficulty | Description |
-|----|------|-----------|-------------|
-| 1 | Syntax Repair | Easy | Fix a syntax error (missing comma) in a query grouping orders by country |
-| 2 | Logic Fix | Medium | Fix a JOIN condition error in a customer spending aggregation query |
-| 3 | Business Investigation | Hard | Fix GROUP BY scope and add missing HAVING clause for category analysis |
-
-**Note:** Each task includes a broken query, hint, and expected correct query template for evaluation.
-
----
+| `schema_info` | string | Database schema: CREATE TABLE statements with all columns |
+| `business_question` | string | Natural language specification of task goal |
+| `query_result` | string | Query execution output: formatted table or error message |
+| `error_message` | string | SQL error details (empty string if successful execution) |
+| `reward` | float | Scalar reward for current step |
+| `done` | boolean | Episode termination flag |
+| `feedback` | string | Textual correctness feedback for debugging |
 
 ## Reward Function
 
-| Situation | Reward |
+| Condition | Reward |
 |-----------|--------|
-| Query matches expected results exactly | `1.0 - (0.05 × step_count)` |
-| Query has correct columns with >80% rows matching | `0.7 - (0.05 × step_count)` |
-| Query executes but <80% rows match or columns differ | `0.3 - (0.05 × step_count)` |
-| Query execution fails with error | `0.0 - (0.05 × step_count)` |
-| Episode reaches max_steps (10) | Episode terminates |
-| Query score ≥ 0.9 | Episode terminates (success) |
+| Exact result match (100% rows correct) | 1.0 |
+| >80% rows match expected output | 0.8 - 0.88 |
+| >50% rows match | 0.6 - 0.8 |
+| Query executes, 0% rows match | 0.2 |
+| Query fails: syntax error | 0.0 |
+| Query fails: missing column | 0.0 |
+| Query fails: type mismatch | 0.0 |
+| Step penalty | -0.01 × step_count (cumulative) |
 
-The agent is penalized 0.05 points per step to encourage quick solutions.
+**Grader Details:** Comparison is order-independent; results sorted before matching. Float values normalized to 2 decimal places. Extra rows penalized proportionally to excess count.
 
----
+## Tasks
 
-## Quick Start
+| ID | Name | Difficulty | What Agent Must Fix |
+|----|------|-----------|-------------|
+| 1 | Syntax Repair | Easy | Missing punctuation in SELECT statement |
+| 2 | Logic Fix | Medium | Incorrect JOIN condition (equating wrong columns) |
+| 3 | Business Investigation | Hard | Missing GROUP BY columns + absent HAVING clause |
 
-### 1. Install from Source
+Each task provides a broken query, hint text, and expected result set for evaluation. Databases are task-specific; schema differs per task_id.
 
-```bash
-git clone https://huggingface.co/spaces/your-username/sql-investigation-env
-cd sql-investigation-env
-pip install -e .
-```
+## Grader Design
 
-### 2. Run with Docker
+**Execution-based comparison:** Compares result sets, not query syntax. Two queries returning identical rows receive identical scores.
 
-```bash
-docker build -t sql-investigation-env .
-docker run -p 7860:7860 sql-investigation-env
-```
+**Order-independent:** Sorts rows before comparison. `SELECT * FROM t ORDER BY id` and `SELECT * FROM t` score identically if result sets match.
 
-### 3. Test the API
+**Float-tolerant:** Numeric columns normalized to 2 decimal places before comparison. Avoids floating-point precision artifacts.
 
-```bash
-# Reset environment and start a task
-curl -X POST http://localhost:7860/reset \
-  -H "Content-Type: application/json" \
-  -d '{"task_id": 1}'
-
-# Submit a SQL query
-curl -X POST http://localhost:7860/step \
-  -H "Content-Type: application/json" \
-  -d '{"query": "SELECT country, COUNT(*) FROM customers GROUP BY country", "task_id": 1}'
-
-# Check health
-curl http://localhost:7860/health
-```
-
----
+**Deterministic:** Identical input query always produces identical output. No randomness in reward assignment or grading.
 
 ## Baseline Scores
 
-The baseline is evaluated by grading the broken query provided with each task (no agent logic):
+| Task | Broken Query Score | Qwen 72B Zero-Shot | Qwen 72B + Context |
+|------|-------------------|-------------------|-------------------|
+| Task 1 (Syntax) | 0.00 | 0.99 | 0.99 |
+| Task 2 (JOIN Logic) | 0.00 | 0.99 | 0.99 |
+| Task 3 (Aggregation) | 0.00 | 0.99 | 0.99 |
+| Average | 0.00 | 0.99 | 0.99 |
 
-| Task | Difficulty | Baseline Score |
-|------|-----------|----------------|
-| Task 1 - Syntax Repair | Easy | 0.00 |
-| Task 2 - Logic Fix | Medium | 0.30 |
-| Task 3 - Business Investigation | Hard | 0.30 |
-| **Average** | | **0.20** |
+## Quick Start
 
-**Note:** Baseline scores use broken queries intentionally. AI agents (like Qwen 72B) can achieve 0.95+ on all tasks by correctly fixing the queries. Baseline scores are generated by running `/baseline` endpoint on submission.
+### Docker Deployment
 
----
+```bash
+docker pull vishwas004/sql-investigation-env
+docker run -p 7860:7860 vishwas004/sql-investigation-env
+```
+
+### Reset Environment
+
+```bash
+curl -X POST http://localhost:7860/reset \
+  -H "Content-Type: application/json" \
+  -d '{"task_id": 1}'
+```
+
+### Execute Query
+
+```bash
+curl -X POST http://localhost:7860/step \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT COUNT(*) FROM orders",
+    "task_id": 1
+  }'
+```
 
 ## API Reference
 
-### `POST /reset`
+| Endpoint | Method | Input | Output | Purpose |
+|----------|--------|-------|--------|---------|
+| `/reset` | POST | `{"task_id": int}` | `{observation, episode_id}` | Initialize episode |
+| `/step` | POST | `{"query": string, "task_id": int}` | `{observation, reward, done, info}` | Execute query step |
+| `/grader` | POST | `{"query": string, "task_id": int}` | `{score, feedback}` | Score query without stepping |
+| `/baseline` | POST | — | `{task_1, task_2, task_3, average}` | Evaluate all broken queries |
+| `/state` | GET | — | `{schema_info, business_question, ...}` | Get current state |
+| `/tasks` | GET | — | `{tasks: [...], action_schema}` | List all available tasks |
+| `/health` | GET | — | `{status: "ok"}` | Health check |
 
-Reset the environment and start a new episode.
+## Training with GRPO
 
-**Request:**
-```json
-{
-  "task_id": null
-}
+Integrate this environment with TRL's GRPO trainer for policy optimization:
+
+```python
+from trl import GRPOTrainer, GRPOConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_id = "Qwen/Qwen2.5-72B-Instruct"
+model = AutoModelForCausalLM.from_pretrained(model_id)
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+config = GRPOConfig(
+    output_dir="./sql-grpo-results",
+    num_train_episodes=1000,
+    max_episode_length=10,
+    learning_rate=1e-5,
+)
+
+trainer = GRPOTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    args=config,
+    eval_strategy="steps",
+)
+
+# Environment interaction loop
+task_id = 1
+observation = env.reset(task_id=task_id)
+
+for step in range(max_steps):
+    # Agent generates SQL query from observation
+    query = model.generate(prompt=observation.schema_info + "\n" + observation.business_question)
+    
+    # Environment executes and returns reward
+    observation, reward, done, info = env.step(query=query, task_id=task_id)
+    
+    if done:
+        break
+
+trainer.train()
 ```
 
-**Response:**
-```json
-{
-  "schema_info": "Database Schema:\n\nTable: customers\n  - id (INTEGER)...",
-  "business_question": "Find the total number of orders per country",
-  "query_result": "Fix a syntax error in a query that groups orders by country",
-  "error_message": "",
-  "reward": 0.0,
-  "done": false,
-  "feedback": "Task loaded. Begin by examining the schema and submitting your SQL query."
-}
-```
+Smooth reward curve enables robust policy gradients: partial progress (0.2 floor) provides learning signal even for failed attempts.
 
----
+## Why This Is Novel
 
-### `POST /step`
+**No Prior SQL Environment in OpenEnv Catalog:** Existing SQL systems focus on generation benchmarks; none offer RL training with execution-based reward.
 
-Execute a SQL query and progress the environment by one step.
+**Execution-Based Reward (Not LLM Judge):** Deterministic, reproducible scoring. No external API calls. Training cost is database execution time, not LLM inference.
 
-**Request:**
-```json
-{
-  "query": "SELECT country, COUNT(*) as count FROM customers GROUP BY country",
-  "task_id": 1
-}
-```
+**Natural Difficulty Progression:** Task 1 requires syntax understanding. Task 2 demands logical composition. Task 3 requires semantic reasoning about business intent. Suitable for curriculum learning.
 
-**Response:**
-```json
-{
-  "observation": {
-    "schema_info": "",
-    "business_question": "Find the total number of orders per country",
-    "query_result": "country | count\n...",
-    "error_message": "",
-    "reward": 0.65,
-    "done": false,
-    "feedback": "Good effort! Your query structure is correct..."
-  },
-  "reward": 0.65,
-  "done": false,
-  "info": {
-    "step": 1,
-    "episode_id": "uuid-string",
-    "score": 0.7,
-    "task_id": 1,
-    "max_steps": 10
-  }
-}
-```
+**Task-Specific Schemas:** Each task has independent database structure. Agents cannot memorize. Generalization is required.
 
----
-
-### `GET /state`
-
-Get the current state of the environment.
-
-**Response:**
-```json
-{
-  "episode_id": "550e8400-e29b-41d4-a716-446655440000",
-  "step_count": 1,
-  "task_id": 1,
-  "current_task_description": "Fix a syntax error in a query that groups orders by country",
-  "max_steps": 10
-}
-```
-
----
-
-### `GET /tasks`
-
-Get all available tasks with their specifications.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "difficulty": "easy",
-    "description": "Fix a syntax error in a query that groups orders by country",
-    "business_question": "Find the total number of orders per country",
-    "hint": "Check if all columns in the SELECT clause are separated properly. Missing a comma between columns?",
-    "action_schema": {
-      "query": "string",
-      "task_id": "integer"
-    }
-  },
-  ...
-]
-```
-
----
-
-### `POST /grader`
-
-Grade a SQL query for a specific task without stepping through the environment.
-
-**Request:**
-```json
-{
-  "query": "SELECT c.country, COUNT(o.id) FROM orders o JOIN customers c ON o.customer_id = c.id GROUP BY c.country",
-  "task_id": 1
-}
-```
-
-**Response:**
-```json
-{
-  "score": 1.0,
-  "feedback": "Perfect! Your query matches the expected results exactly. Excellent work!"
-}
-```
-
----
-
-### `POST /baseline`
-
-Run baseline evaluation by grading the broken query for each of the 3 tasks.
-
-**Response:**
-```json
-{
-  "task_1": 0.0,
-  "task_2": 0.0,
-  "task_3": 0.0,
-  "average": 0.0
-}
-```
-
----
-
-### `GET /health`
-
-Health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-## Database Schema
-
-The environment uses an in-memory SQLite database with the following tables:
-
-- **customers** (id, name, email, country)
-- **products** (id, name, category, price)
-- **orders** (id, customer_id, amount, status, created_date)
-- **order_items** (id, order_id, product_id, quantity)
-
-Each environment reset creates fresh synthetic data with randomized values for realistic variation.
-
----
-
-## Development
-
-To install development dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Run tests:
-
-```bash
-pytest
-```
-
-Format code:
-
-```bash
-black .
-```
-
----
-
-## Citation
-
-If you use this environment in your research, please cite:
-
-```bibtex
-@misc{sql_investigation_env,
-  title={SQL Investigation OpenEnv},
-  author={Your Name},
-  year={2026},
-  howpublished={\url{https://huggingface.co/spaces/your-username/sql-investigation-env}}
-}
-```
-
----
-
-## License
-
-This environment is released under the MIT License. See LICENSE for details.
-
----
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request with improvements, additional tasks, or bug fixes.
+**SQLite In-Memory:** Zero external dependencies. Runs on laptop, cloud, or air-gapped environment. No Docker registry required for research reproducibility.

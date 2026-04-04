@@ -63,13 +63,14 @@ class Grader:
             # 3. VALIDATE QUERY EXECUTION
             if user_error:
                 print(f"\n[RESULT] User query FAILED: {user_error}")
-                print(f"[SCORE] 0.0 (query error)")
+                print(f"[SCORE] 0.0 (syntax error - no reward)")
                 return 0.0
             
+            # Query executed successfully (even if 0 rows) - will give minimum base reward
             if not user_rows or len(user_rows) == 0:
                 print(f"\n[RESULT] User query returned 0 rows")
-                print(f"[SCORE] 0.0 (no results)")
-                return 0.0
+                # Don't return 0.0 - query executed successfully, deserves minimum reward
+                # Will assign 0.2 base + 0.0 match = 0.2
             
             if expected_error or not expected_rows or len(expected_rows) == 0:
                 print(f"\n[ERROR] Expected query failed - cannot grade")
@@ -77,14 +78,14 @@ class Grader:
                 return 0.0
             
             # 4. NORMALIZE BOTH RESULT SETS
-            user_normalized = self._normalize_rows(user_rows)
+            user_normalized = self._normalize_rows(user_rows) if user_rows else []
             expected_normalized = self._normalize_rows(expected_rows)
             
             print(f"\nNormalized Results:")
             print(f"  User: {len(user_normalized)} unique rows")
             print(f"  Expected: {len(expected_normalized)} unique rows")
             
-            # 5. CALCULATE MATCH SCORE - IMPROVED TO HANDLE EXTRA/MISSING ROWS
+            # 5. CALCULATE MATCH SCORE - SMOOTH REWARD CURVE WITH MINIMUM FLOOR
             user_set = set(user_normalized)
             expected_set = set(expected_normalized)
             
@@ -94,7 +95,7 @@ class Grader:
                 print(f"[SCORE] 1.0 (perfect)")
                 return 1.0
             
-            # Analyze differences
+            # Analyze differences for partial credit
             matches = user_set & expected_set
             extra_rows = user_set - expected_set  # User has these but shouldn't
             missing_rows = expected_set - user_set  # User is missing these
@@ -112,28 +113,24 @@ class Grader:
             print(f"  Extra rows: {extra_count} (user has but shouldn't)")
             print(f"  Missing rows: {missing_count} (user is missing)")
             
-            # Calculate match ratio and penalties
+            # Calculate match ratio - base score + bonus for partial correctness
             match_ratio = match_count / expected_count if expected_count > 0 else 0
             
             # Penalty for extra rows (user returned too much)
             extra_penalty = 0.0
             if extra_count > 0:
-                # Each extra row reduces score by ~10% if it's a significant deviation
-                # E.g., expected 3 rows but got 10 = 7 extra = major penalty
                 extra_ratio = extra_count / expected_count if expected_count > 0 else 0
-                extra_penalty = min(0.5, extra_ratio * 0.3)  # Up to 50% penalty for too many extras
+                extra_penalty = min(0.5, extra_ratio * 0.3)
             
             print(f"  Match ratio: {match_ratio:.1%}")
-            print(f"  Extra penalty: {extra_penalty:.2f}")
+            if extra_penalty > 0:
+                print(f"  Extra penalty: {extra_penalty:.2f}")
             
-            # Score based on corrected ratio accounting for failures
-            score = self._calculate_score(match_ratio, user_set, expected_set)
+            # Score with smooth reward curve: base 0.2 + bonus up to 0.8
+            # This ensures no valid query returns 0.0, only syntax errors
+            score = self._calculate_smooth_score(match_ratio, extra_penalty)
             
-            # Apply penalty for extra rows
-            if extra_count > 0:
-                score = max(0.0, score - extra_penalty)
-            
-            print(f"\n[RESULT] Partial Match (with extra/missing row analysis)")
+            print(f"\n[RESULT] Partial Match (smooth reward curve applied)")
             print(f"[SCORE] {score:.2f}")
             
             return score
@@ -216,7 +213,9 @@ class Grader:
     
     def _calculate_score(self, match_ratio: float, user_set: Set, expected_set: Set) -> float:
         """
-        Calculate score based on match ratio.
+        DEPRECATED: Use _calculate_smooth_score instead.
+        
+        Calculate score based on match ratio with tiered approach.
         
         1.0 - exact match (all rows match)
         0.9 - >=90%
@@ -225,12 +224,6 @@ class Grader:
         0.5 - >=50%
         0.3 - >=30%
         0.0 - <30% or query fail
-        
-        This ensures:
-        - Correct queries get 1.0
-        - Mostly correct queries get 0.7-0.9
-        - Partially correct queries get 0.3-0.5
-        - Wrong queries get 0.0-0.3
         """
         if match_ratio >= 0.95:
             return 1.0
@@ -246,6 +239,40 @@ class Grader:
             return 0.3
         else:
             return 0.0
+    
+    def _calculate_smooth_score(self, match_ratio: float, extra_penalty: float) -> float:
+        """
+        Calculate score with smooth reward curve for meaningful partial signals.
+        
+        Ensures:
+        - Syntax errors only return 0.0 (handled in grade())
+        - Any successful query returns at least 0.2 (minimum base reward)
+        - Smooth scaling from 0.2 → 1.0 based on match ratio
+        - Extra row penalty applied
+        
+        Formula: 0.2 (base) + (match_ratio * 0.8) - extra_penalty
+        
+        Examples:
+        - 0% match, 0 extra: 0.2 + 0 - 0 = 0.2 (minimum)
+        - 25% match, 0 extra: 0.2 + 0.2 - 0 = 0.4
+        - 50% match, 0 extra: 0.2 + 0.4 - 0 = 0.6
+        - 75% match, 0 extra: 0.2 + 0.6 - 0 = 0.8
+        - 100% match, 0 extra: 0.2 + 0.8 - 0 = 1.0 (exact match)
+        """
+        # Base reward of 0.2 for successful execution
+        base_reward = 0.2
+        
+        # Bonus for partial correctness (up to 0.8)
+        match_bonus = match_ratio * 0.8
+        
+        # Calculate score with penalty
+        score = base_reward + match_bonus - extra_penalty
+        
+        # Ensure score stays in valid range [0.2, 1.0]
+        # (Already handled above, but safety check)
+        score = max(0.2, min(1.0, score))
+        
+        return score
     
     def get_feedback(self, score: float, error: str = "") -> str:
         """Generate human-readable feedback based on score."""
