@@ -263,6 +263,7 @@ class DatabaseManager(ABC):
             ("Laptop Stand", "Accessories", 79.99),
             ("USB Hub", "Accessories", 39.99),
             ("Screen Filter", "Accessories", 29.99),
+            ("Vintage Books", "Books", 15.99),
         ]
         
         for name, category, price in product_data:
@@ -289,7 +290,7 @@ class DatabaseManager(ABC):
             # Insert 1-4 order items per order
             num_items = random.randint(1, 4)
             for _ in range(num_items):
-                product_id = random.randint(1, 12)
+                product_id = random.randint(1, 12)  # Normal products 1-12
                 quantity = random.randint(1, 3)
                 line_total = round(random.uniform(30, 800), 2)
                 
@@ -297,6 +298,17 @@ class DatabaseManager(ABC):
                     "INSERT INTO order_items (order_id, product_id, quantity, line_total) VALUES (?, ?, ?, ?)",
                     (order_id, product_id, quantity, line_total)
                 )
+
+        # Force AT LEAST ONE order for product 13 ("Vintage Books") that fails the HAVING clause (< 3 orders, < 100 avg)
+        cursor.execute(
+            "INSERT INTO orders (customer_id, total_amount, order_status, order_date) VALUES (?, ?, ?, ?)",
+            (1, 15.99, "completed", "2023-01-01")
+        )
+        order_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO order_items (order_id, product_id, quantity, line_total) VALUES (?, ?, ?, ?)",
+            (order_id, 13, 1, 15.99)
+        )
 
     def _insert_fake_data(self, cursor):
         """Insert realistic fake data into tables."""

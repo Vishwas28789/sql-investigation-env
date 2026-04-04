@@ -6,9 +6,9 @@ TASKS = [
         "difficulty": "easy",
         "description": "Fix a syntax error in a query that groups orders by country",
         "business_question": "Find the total number of orders per country",
-        "broken_query": """SELECT country COUNT(*) as order_count FROM customers c 
+        "broken_query": """SELECT c.country, COUNT(*) as order_count FROM customers c 
 JOIN orders o ON c.id = o.customer_id 
-GROUP BY c.country""",
+GROUP BY c.email""",
         "hint": "Check if all columns in the SELECT clause are separated properly. Missing a comma between columns?",
         "expected_query_template": """SELECT customers.country, COUNT(*)
 FROM customers
@@ -23,9 +23,7 @@ GROUP BY customers.country"""
         "broken_query": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
 JOIN customers c ON o.order_id = c.cust_id 
-GROUP BY c.cust_id 
-ORDER BY total_spending DESC 
-LIMIT 5""",
+GROUP BY c.cust_id""",
         "hint": "Review the JOIN condition. What column links orders to customers? It's not the order ID.",
         "expected_query_template": """SELECT c.customer_name, SUM(o.order_amount) as total_spending 
 FROM orders o 
