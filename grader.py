@@ -8,6 +8,11 @@ Requirements:
 - Clear: Explains why a query got a certain score
 """
 
+import sys
+import builtins
+# Redirect all prints for this module to stderr to keep stdout clean for OpenEnv-compliant logs
+print = lambda *args, **kwargs: builtins.print(*args, **kwargs, file=sys.stderr)
+
 from db import DatabaseManager
 from tasks import get_task
 from typing import List, Tuple, Set

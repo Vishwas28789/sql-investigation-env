@@ -13,6 +13,8 @@ class DatabaseManager(ABC):
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.task_id = task_id
+        # Seed for determinism as per OpenEnv requirements
+        random.seed(42)
         self._setup_task_db(task_id)
 
     def _setup_task_db(self, task_id: int):

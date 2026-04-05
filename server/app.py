@@ -129,24 +129,21 @@ async def reset_environment(request: dict = Body(default={})):
         except (ValueError, TypeError):
             task_id = 1
             
-        print("START")
-        print(f"STEP: Resetting task {task_id}")
+        # [START] task=... env=sql-investigation-env model=sql-agent
+        print(f"[START] task={task_id} env=sql-investigation-env model=sql-agent")
         
         # Get or create independent environment for this task
         environment = get_or_create_environment(task_id)
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
         
-        print(f"STEP: Schema loaded ({len(observation.schema_info)} chars)")
-        print(f"STEP: Business question initialized")
-        print(f"END (score={observation.reward:.2f})")
-        
         return ResetResponse(
             observation=observation,
             episode_id=environment.episode_id
         )
     except Exception as e:
-        print(f"[ERROR /reset] {str(e)}")
+        # Log error to stderr
+        print(f"[ERROR /reset] {str(e)}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -162,8 +159,6 @@ async def step_environment(request: dict = Body(default={})):
         except (ValueError, TypeError):
             task_id = 1
             
-        print("START")
-        print(f"STEP: Executing step for task {task_id}")
         
         # Get the environment for this specific task
         environment = get_or_create_environment(task_id)
@@ -171,19 +166,34 @@ async def step_environment(request: dict = Body(default={})):
         action = SQLAction(query=query, task_id=task_id)
         observation, _, _, info = environment.step(action)
         
-        print(f"STEP: Query executed. Reward: {observation.reward:.2f}")
-        print(f"STEP: Episode done: {observation.done}")
-        print(f"END (score={observation.reward:.2f})")
+        # [STEP] step=... action=... reward=... done=... error=...
+        def get_attr(obj, attr, default=None):
+            if hasattr(obj, attr):
+                return getattr(obj, attr)
+            if isinstance(obj, dict):
+                return obj.get(attr, default)
+            return default
+            
+        error_str = get_attr(observation, "error_message", "null")
+        done_val = get_attr(observation, "done", False)
+        reward_val = get_attr(observation, "reward", 0.0)
+        done_str = "true" if done_val else "false"
+        
+        print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.2f} done={done_str} error={error_str}")
+        
+        if done_val:
+            print(f"[END] success={str(reward_val >= 0.5).lower()} steps={info['step']} score={reward_val:.2f} rewards={reward_val:.2f}")
         
         # Return observation with all fields including reward, done, feedback
         return StepResponse(
             observation=observation,
-            reward=observation.reward,
-            done=observation.done,
+            reward=reward_val,
+            done=done_val,
             info=info
         )
     except Exception as e:
-        print(f"[ERROR /step] {str(e)}")
+        # Log error to stderr
+        print(f"[ERROR /step] {str(e)}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 
 
