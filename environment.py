@@ -131,8 +131,8 @@ class SQLInvestigationEnvironment:
         # Convert query result to string for observation
         result_str = self._format_query_result(query_result)
         
-        # Calculate reward: use grader score directly with minimal step penalty
-        reward = score - (0.01 * self.step_count)
+        # Calculate reward: use grader score directly
+        reward = score
         reward = max(-1.0, min(1.0, reward))  # Clamp between -1 and 1
         
         # Determine if episode is done

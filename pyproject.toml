@@ -1,0 +1,15 @@
+[project]
+name = "sql-investigation-env"
+version = "0.1.0"
+description = "SQL Investigation OpenEnv environment"
+authors = [
+    { name = "Vishwas" }
+]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic"
+]
+
+[tool.openenv]
+entrypoint = "server.app:app"

@@ -139,7 +139,7 @@ async def reset_environment(request: dict = Body(default={})):
         
         print(f"STEP: Schema loaded ({len(observation.schema_info)} chars)")
         print(f"STEP: Business question initialized")
-        print("END")
+        print(f"END (score={observation.reward:.2f})")
         
         return ResetResponse(
             observation=observation,
@@ -173,7 +173,7 @@ async def step_environment(request: dict = Body(default={})):
         
         print(f"STEP: Query executed. Reward: {observation.reward:.2f}")
         print(f"STEP: Episode done: {observation.done}")
-        print("END")
+        print(f"END (score={observation.reward:.2f})")
         
         # Return observation with all fields including reward, done, feedback
         return StepResponse(
@@ -254,7 +254,7 @@ async def grade_query(request: GraderRequest):
         
         # Get feedback (use empty string for error since we're just grading)
         feedback = grader.get_feedback(score, "")
-        print("END")
+        print(f"END (score={score:.2f})")
         
         return GraderResponse(score=score, feedback=feedback)
     except HTTPException:
