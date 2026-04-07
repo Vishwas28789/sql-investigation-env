@@ -312,15 +312,19 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
     else:
         print(f"[DEBUG] API NOT CONNECTED ({api_status})", file=sys.stderr)
     
-    # MANDATORY: Ping LiteLLM proxy for validation (Must run every time)
-    try:
-        openai_client.chat.completions.create(
-            model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=5
-        )
-    except Exception:
-        pass
+    # MANDATORY: Ping LiteLLM proxy for validation
+    if openai_client:
+        try:
+            openai_client.chat.completions.create(
+                model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=5
+            )
+            print("[DEBUG] Proxy ping success", file=sys.stderr)
+        except Exception as e:
+            print(f"[DEBUG] Proxy ping failed: {str(e)}", file=sys.stderr)
+    else:
+        print("[DEBUG] OpenAI client not initialized", file=sys.stderr)
     
     for episode_num in range(num_episodes):
         # Use first episode's task_id for the START line
