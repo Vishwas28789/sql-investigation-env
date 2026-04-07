@@ -27,32 +27,30 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+# Environment Server URL (Localhost defaults to 7860 as per openenv.yaml entrypoint)
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+
+# Meta LLM Proxy - MANDATORY REQUIREMENTS
+API_BASE_URL = os.getenv("API_BASE_URL")
+API_KEY = os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "sql-agent")
-HF_TOKEN = os.getenv("HF_TOKEN")
 
-# HuggingFace API key (keep legacy for compatibility if needed, but prioritize HF_TOKEN)
-HF_API_KEY = HF_TOKEN or os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-HF_ROUTER_URL = "https://router.huggingface.co/v1"
-
-# Initialize OpenAI client with HuggingFace router
+# Initialize OpenAI client using environment variables
 openai_client = None
 api_status = "DISCONNECTED"
 
-if HF_API_KEY:
+if API_BASE_URL and API_KEY:
     try:
-        # SAFE Mock Usage as per requirement
         from openai import OpenAI
         openai_client = OpenAI(
-            base_url=HF_ROUTER_URL,
-            api_key=HF_API_KEY
+            base_url=API_BASE_URL,
+            api_key=API_KEY
         )
         api_status = "CONNECTED"
     except Exception as e:
         api_status = f"ERROR: {str(e)}"
 else:
-    api_status = "NO_API_KEY"
-    # Ensure client exists as a mock if needed
+    api_status = "MISSING_ENV_VERS"
     openai_client = None
 
 # Task name mapping
@@ -162,7 +160,7 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         Tuple of (success: bool, response_data: dict or None, error: str)
     """
     try:
-        url = f"{API_BASE_URL}{endpoint}"
+        url = f"{ENV_BASE_URL}{endpoint}"
         print(f"[DEBUG] Calling {method} {url} with data={data}", file=sys.stderr)
         
         if method == "GET":
@@ -321,7 +319,19 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
     if api_status == "CONNECTED":
         print("[DEBUG] HF API Connected", file=sys.stderr)
     else:
-        print(f"[DEBUG] HF API NOT FOUND ({api_status})", file=sys.stderr)
+        print(f"[DEBUG] API NOT CONNECTED ({api_status})", file=sys.stderr)
+    
+    # MANDATORY: Ping LiteLLM proxy for validation
+    if openai_client:
+        try:
+            print("[DEBUG] Pinging LLM proxy for validation...", file=sys.stderr)
+            openai_client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=5
+            )
+        except Exception as e:
+            print(f"[DEBUG] Ping failed: {str(e)}", file=sys.stderr)
     
     for episode_num in range(num_episodes):
         # Use first episode's task_id for the START line
