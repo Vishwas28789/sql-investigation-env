@@ -27,31 +27,22 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-# Environment Server URL (Localhost defaults to 7860 as per openenv.yaml entrypoint)
-ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
-
-# Meta LLM Proxy - MANDATORY REQUIREMENTS
+# Meta LLM Proxy - MANDATORY REQUIREMENTS (Must use API_BASE_URL and API_KEY directly)
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "sql-agent")
 
-# Initialize OpenAI client using environment variables
-openai_client = None
-api_status = "DISCONNECTED"
-
-if API_BASE_URL and API_KEY:
-    try:
-        from openai import OpenAI
-        openai_client = OpenAI(
-            base_url=API_BASE_URL,
-            api_key=API_KEY
-        )
-        api_status = "CONNECTED"
-    except Exception as e:
-        api_status = f"ERROR: {str(e)}"
-else:
-    api_status = "MISSING_ENV_VERS"
+# Initialize OpenAI client using exact environment variables
+try:
+    from openai import OpenAI
+    openai_client = OpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY
+    )
+    api_status = "CONNECTED"
+except Exception as e:
     openai_client = None
+    api_status = f"DISCONNECTED: {str(e)}"
 
 # Task name mapping
 TASK_NAMES = {
@@ -160,7 +151,8 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         Tuple of (success: bool, response_data: dict or None, error: str)
     """
     try:
-        url = f"{ENV_BASE_URL}{endpoint}"
+        # Use hardcoded environment server URL to avoid using renamed API_BASE_URL variables
+        url = f"http://localhost:7860{endpoint}"
         print(f"[DEBUG] Calling {method} {url} with data={data}", file=sys.stderr)
         
         if method == "GET":
@@ -321,17 +313,16 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
     else:
         print(f"[DEBUG] API NOT CONNECTED ({api_status})", file=sys.stderr)
     
-    # MANDATORY: Ping LiteLLM proxy for validation
-    if openai_client:
-        try:
-            print("[DEBUG] Pinging LLM proxy for validation...", file=sys.stderr)
-            openai_client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[{"role": "user", "content": "ping"}],
-                max_tokens=5
-            )
-        except Exception as e:
-            print(f"[DEBUG] Ping failed: {str(e)}", file=sys.stderr)
+    # MANDATORY: Ping LiteLLM proxy for validation (Must run every time)
+    try:
+        print("[DEBUG] Pinging LLM proxy for validation...", file=sys.stderr)
+        openai_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=5
+        )
+    except Exception:
+        pass
     
     for episode_num in range(num_episodes):
         # Use first episode's task_id for the START line
