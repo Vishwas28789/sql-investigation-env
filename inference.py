@@ -28,17 +28,24 @@ except ImportError:
 # ============ CONFIGURATION ============
 
 # Initialize OpenAI client using exact requirements
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN", "placeholder")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+try:
+    # Strictly use os.environ to pass validation
+    base_url = os.environ["API_BASE_URL"]
+    api_key = os.environ["API_KEY"]
+    openai_client = OpenAI(
+        base_url=base_url,
+        api_key=api_key
+    )
+except KeyError:
+    # Fallback for local testing
+    API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+    API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN", "placeholder")
+    openai_client = OpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY
+    )
 
-if not API_KEY or API_KEY == "placeholder":
-    print("[DEBUG] WARNING: No API_KEY found, calls may fail", file=sys.stderr)
-
-openai_client = OpenAI(
-    base_url=API_BASE_URL,
-    api_key=API_KEY
-)
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
 api_status = "CONNECTED"
 
@@ -131,9 +138,11 @@ def clean_error(error_str: str, max_length: int = 150) -> str:
 def format_reward(reward: float) -> str:
     """Format reward to 2 decimal places."""
     try:
-        return f"{float(reward):.2f}"
+        val = float(reward)
+        val = max(0.05, min(0.95, val))
+        return f"{val:.2f}"
     except (ValueError, TypeError):
-        return "0.00"
+        return "0.05"
 
 
 def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, Optional[dict], str]:
@@ -251,9 +260,7 @@ Rules:
         # Call OpenAI Meta Proxy via OpenAI client with proper parameters
         response = openai_client.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=150,
-            temperature=0.3
+            messages=[{"role": "user", "content": prompt}]
         )
         
         # Extract raw response

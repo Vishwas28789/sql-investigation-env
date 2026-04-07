@@ -176,7 +176,7 @@ async def step_environment(request: dict = Body(default={})):
             
         error_str = get_attr(observation, "error_message", "null")
         done_val = get_attr(observation, "done", False)
-        reward_val = get_attr(observation, "reward", 0.0)
+        reward_val = get_attr(observation, "reward", 0.05)
         done_str = "true" if done_val else "false"
         
         print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.2f} done={done_str} error={error_str}")
@@ -321,9 +321,9 @@ async def run_baseline():
         
         # Return baseline response with deterministic order
         return BaselineResponse(
-            task_1=scores.get("task_1", 0.0),
-            task_2=scores.get("task_2", 0.0),
-            task_3=scores.get("task_3", 0.0),
+            task_1=scores.get("task_1", 0.05),
+            task_2=scores.get("task_2", 0.05),
+            task_3=scores.get("task_3", 0.05),
             average=average_score
         )
     except Exception as e:

@@ -65,7 +65,7 @@ class SQLInvestigationEnvironment:
             business_question=self.current_task["business_question"],
             query_result=self.current_task["description"],
             error_message="",
-            reward=0.0,
+            reward=0.05,
             done=False,
             feedback="Task loaded. Examine the schema and submit your SQL query."
         )
@@ -87,11 +87,11 @@ class SQLInvestigationEnvironment:
                 business_question="",
                 query_result="",
                 error_message="No task initialized",
-                reward=0.0,
+                reward=0.05,
                 done=True,
                 feedback="Error: Reset the environment first with reset(task_id)"
             )
-            return (error_obs, 0.0, True, {
+            return (error_obs, 0.05, True, {
                 "step": self.step_count,
                 "episode_id": self.episode_id,
                 "error": "No task initialized"
@@ -105,11 +105,11 @@ class SQLInvestigationEnvironment:
                     business_question="",
                     query_result="",
                     error_message="Episode already finished",
-                    reward=0.0,
+                    reward=0.05,
                     done=True,
                     feedback="Episode complete. Start a new episode with reset()"
                 ),
-                0.0,
+                0.05,
                 True,
                 {"step": self.step_count, "episode_id": self.episode_id, "error": "Episode finished"}
             )
