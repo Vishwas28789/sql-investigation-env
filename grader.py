@@ -46,104 +46,82 @@ class Grader:
             task = get_task(task_id)
             if not task or "expected_query_template" not in task:
                 print(f"[GRADER] Task {task_id}: Invalid task definition")
-                return 0.0
-            
-            expected_query = task["expected_query_template"]
-            
-            # 2. EXECUTE BOTH QUERIES
-            user_rows, user_error = db_manager.execute_query(agent_query)
-            expected_rows, expected_error = db_manager.execute_query(expected_query)
-            
-            print(f"\n{'='*60}")
-            print(f"[GRADER] Task {task_id} - Result Comparison")
-            print(f"{'='*60}")
-            print(f"\nUser Query:")
-            print(f"  Rows: {len(user_rows) if user_rows else 0}")
-            print(f"  Error: {user_error if user_error else 'None'}")
-            
-            print(f"\nExpected Query:")
-            print(f"  Rows: {len(expected_rows) if expected_rows else 0}")
-            print(f"  Error: {expected_error if expected_error else 'None'}")
-            
-            # 3. VALIDATE QUERY EXECUTION
-            if user_error:
-                print(f"\n[RESULT] User query FAILED: {user_error}")
-                print(f"[SCORE] 0.0 (syntax error - no reward)")
-                return 0.0
-            
-            # Query executed successfully (even if 0 rows) - will give minimum base reward
-            if not user_rows or len(user_rows) == 0:
-                print(f"\n[RESULT] User query returned 0 rows")
-                # Don't return 0.0 - query executed successfully, deserves minimum reward
-                # Will assign 0.2 base + 0.0 match = 0.2
-            
-            if expected_error or not expected_rows or len(expected_rows) == 0:
-                print(f"\n[ERROR] Expected query failed - cannot grade")
-                print(f"[SCORE] 0.0 (grading error)")
-                return 0.0
-            
-            # 4. NORMALIZE BOTH RESULT SETS
-            user_normalized = self._normalize_rows(user_rows) if user_rows else []
-            expected_normalized = self._normalize_rows(expected_rows)
-            
-            print(f"\nNormalized Results:")
-            print(f"  User: {len(user_normalized)} unique rows")
-            print(f"  Expected: {len(expected_normalized)} unique rows")
-            
-            # 5. CALCULATE MATCH SCORE - SMOOTH REWARD CURVE WITH MINIMUM FLOOR
-            user_set = set(user_normalized)
-            expected_set = set(expected_normalized)
-            
-            # Exact match
-            if user_set == expected_set:
-                print(f"\n[RESULT] EXACT MATCH - All rows and columns match perfectly")
-                print(f"[SCORE] 1.0 (perfect)")
-                return 1.0
-            
-            # Analyze differences for partial credit
-            matches = user_set & expected_set
-            extra_rows = user_set - expected_set  # User has these but shouldn't
-            missing_rows = expected_set - user_set  # User is missing these
-            
-            match_count = len(matches)
-            expected_count = len(expected_set)
-            user_count = len(user_set)
-            extra_count = len(extra_rows)
-            missing_count = len(missing_rows)
-            
-            print(f"\nDetailed Match Analysis:")
-            print(f"  Expected rows: {expected_count}")
-            print(f"  User returned: {user_count}")
-            print(f"  Matching rows: {match_count}")
-            print(f"  Extra rows: {extra_count} (user has but shouldn't)")
-            print(f"  Missing rows: {missing_count} (user is missing)")
-            
-            # Calculate match ratio - base score + bonus for partial correctness
-            match_ratio = match_count / expected_count if expected_count > 0 else 0
-            
-            # Penalty for extra rows (user returned too much)
-            extra_penalty = 0.0
-            if extra_count > 0:
-                extra_ratio = extra_count / expected_count if expected_count > 0 else 0
-                extra_penalty = min(0.5, extra_ratio * 0.3)
-            
-            print(f"  Match ratio: {match_ratio:.1%}")
-            if extra_penalty > 0:
-                print(f"  Extra penalty: {extra_penalty:.2f}")
-            
-            # Score with smooth reward curve: base 0.2 + bonus up to 0.8
-            # This ensures no valid query returns 0.0, only syntax errors
-            score = self._calculate_smooth_score(match_ratio, extra_penalty)
-            
-            print(f"\n[RESULT] Partial Match (smooth reward curve applied)")
-            print(f"[SCORE] {score:.2f}")
-            
-            return score
-            
+                score = 0.0
+            else:
+                expected_query = task["expected_query_template"]
+                
+                # 2. EXECUTE BOTH QUERIES
+                user_rows, user_error = db_manager.execute_query(agent_query)
+                expected_rows, expected_error = db_manager.execute_query(expected_query)
+                
+                print(f"\n{'='*60}")
+                print(f"[GRADER] Task {task_id} - Result Comparison")
+                print(f"{'='*60}")
+                print(f"\nUser Query:")
+                print(f"  Rows: {len(user_rows) if user_rows else 0}")
+                print(f"  Error: {user_error if user_error else 'None'}")
+                
+                print(f"\nExpected Query:")
+                print(f"  Rows: {len(expected_rows) if expected_rows else 0}")
+                print(f"  Error: {expected_error if expected_error else 'None'}")
+                
+                # 3. VALIDATE QUERY EXECUTION
+                if user_error:
+                    print(f"\n[RESULT] User query FAILED: {user_error}")
+                    print(f"[SCORE] 0.0 (syntax error - no reward)")
+                    score = 0.0
+                elif expected_error or not expected_rows or len(expected_rows) == 0:
+                    print(f"\n[ERROR] Expected query failed - cannot grade")
+                    print(f"[SCORE] 0.0 (grading error)")
+                    score = 0.0
+                else:
+                    # 4. NORMALIZE BOTH RESULT SETS
+                    user_normalized = self._normalize_rows(user_rows) if user_rows else []
+                    expected_normalized = self._normalize_rows(expected_rows)
+                    
+                    print(f"\nNormalized Results:")
+                    print(f"  User: {len(user_normalized)} unique rows")
+                    print(f"  Expected: {len(expected_normalized)} unique rows")
+                    
+                    # 5. CALCULATE MATCH SCORE - SMOOTH REWARD CURVE WITH MINIMUM FLOOR
+                    user_set = set(user_normalized)
+                    expected_set = set(expected_normalized)
+                    
+                    # Exact match check
+                    if user_set == expected_set:
+                        print(f"\n[RESULT] EXACT MATCH - All rows and columns match perfectly")
+                        score = 1.0
+                    else:
+                        # Analyze differences for partial credit
+                        matches = user_set & expected_set
+                        extra_rows = user_set - expected_set
+                        
+                        match_count = len(matches)
+                        expected_count = len(expected_set)
+                        extra_count = len(extra_rows)
+                        
+                        match_ratio = match_count / expected_count if expected_count > 0 else 0
+                        extra_penalty = min(0.5, (extra_count / expected_count if expected_count > 0 else 0) * 0.3)
+                        
+                        score = self._calculate_smooth_score(match_ratio, extra_penalty)
+                        print(f"\n[RESULT] Partial Match score: {score:.2f}")
+
         except Exception as e:
             print(f"\n[ERROR] Grader exception: {type(e).__name__}: {str(e)}")
-            print(f"[SCORE] 0.0 (exception)")
-            return 0.0
+            score = 0.0
+
+        # ========== STRICT OPENENV BOUNDING (0, 1) ==========
+        score = float(score)
+        if score <= 0:
+            score = 0.05
+        elif score >= 1:
+            score = 0.95
+        
+        # Final safety clamp
+        score = max(0.01, min(score, 0.99))
+        
+        print(f"[GRADER] FINAL CLAMPED SCORE: {score}")
+        return score
     
     def _normalize_rows(self, rows: List) -> List[Tuple]:
         """
