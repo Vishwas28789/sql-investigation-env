@@ -27,14 +27,13 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-# Meta LLM Proxy - MANDATORY REQUIREMENTS (Must use API_BASE_URL and API_KEY directly)
+# Meta LLM Proxy - MANDATORY REQUIREMENTS (Exact variable names)
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "sql-agent")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-# Initialize OpenAI client using exact environment variables
+# Initialize OpenAI client using exact requirements
 try:
-    from openai import OpenAI
     openai_client = OpenAI(
         base_url=API_BASE_URL,
         api_key=API_KEY
@@ -315,9 +314,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
     
     # MANDATORY: Ping LiteLLM proxy for validation (Must run every time)
     try:
-        print("[DEBUG] Pinging LLM proxy for validation...", file=sys.stderr)
         openai_client.chat.completions.create(
-            model=MODEL_NAME,
+            model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=5
         )
