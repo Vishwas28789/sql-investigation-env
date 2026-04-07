@@ -133,7 +133,7 @@ class SQLInvestigationEnvironment:
         
         # Calculate reward: use grader score directly
         reward = score
-        reward = max(-1.0, min(1.0, reward))  # Clamp between -1 and 1
+        reward = max(-1.0, min(0.95, reward))  # Clamp between -1 and 0.95
         
         # Determine if episode is done
         if score >= 0.9 or self.step_count >= self.max_steps:

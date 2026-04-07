@@ -90,7 +90,7 @@ class Grader:
                     # Exact match check
                     if user_set == expected_set:
                         print(f"\n[RESULT] EXACT MATCH - All rows and columns match perfectly")
-                        score = 1.0
+                        score = 0.95
                     else:
                         # Analyze differences for partial credit
                         matches = user_set & expected_set
@@ -209,7 +209,7 @@ class Grader:
         0.0 - <30% or query fail
         """
         if match_ratio >= 0.95:
-            return 1.0
+            return 0.95
         elif match_ratio >= 0.90:
             return 0.9
         elif match_ratio >= 0.80:
@@ -253,7 +253,7 @@ class Grader:
         
         # Ensure score stays in valid range [0.2, 1.0]
         # (Already handled above, but safety check)
-        score = max(0.2, min(1.0, score))
+        score = max(0.2, min(0.95, score))
         
         return score
     
