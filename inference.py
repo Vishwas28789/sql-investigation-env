@@ -28,9 +28,12 @@ except ImportError:
 # ============ CONFIGURATION ============
 
 # Initialize OpenAI client using exact requirements
-API_BASE_URL = os.getenv("API_BASE_URL")
-API_KEY = os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN", "placeholder")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+
+if not API_KEY or API_KEY == "placeholder":
+    print("[DEBUG] WARNING: No API_KEY found, calls may fail", file=sys.stderr)
 
 openai_client = OpenAI(
     base_url=API_BASE_URL,
@@ -146,8 +149,9 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         Tuple of (success: bool, response_data: dict or None, error: str)
     """
     try:
-        # Use hardcoded environment server URL to avoid using renamed API_BASE_URL variables
-        url = f"http://localhost:7860{endpoint}"
+        # Use environment variable for server URL, defaulting to local
+        env_url = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+        url = f"{env_url}{endpoint}"
         print(f"[DEBUG] Calling {method} {url} with data={data}", file=sys.stderr)
         
         if method == "GET":
@@ -446,8 +450,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         # Format rewards list: r1,r2,r3
         rewards_str = ",".join(format_reward(r) for r in rewards_list)
         
-        # Output: [END] success=<bool> steps=<n> score=<...> rewards=<list>
-        print(f"[END] success={success_str} steps={step_count} score={format_reward(final_score)} rewards={rewards_str}")
+        # Output: [END] success=<bool> steps=<n> rewards=<list>
+        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
 
 
 # ============ ENTRY POINT ============
