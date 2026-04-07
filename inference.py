@@ -27,21 +27,17 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-# Meta LLM Proxy - MANDATORY REQUIREMENTS (Exact variable names)
+# Initialize OpenAI client using exact requirements
 API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-# Initialize OpenAI client using exact requirements
-try:
-    openai_client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=API_KEY
-    )
-    api_status = "CONNECTED"
-except Exception as e:
-    openai_client = None
-    api_status = f"DISCONNECTED: {str(e)}"
+openai_client = OpenAI(
+    base_url=API_BASE_URL,
+    api_key=API_KEY
+)
+
+api_status = "CONNECTED"
 
 # Task name mapping
 TASK_NAMES = {
@@ -246,9 +242,9 @@ Rules:
         
         prompt += "Generate the SQL query:"
         
-        print(f"[DEBUG] Calling HuggingFace API with model={MODEL_NAME}", file=sys.stderr)
+        print(f"[DEBUG] Calling OpenAI Meta Proxy with model={MODEL_NAME}", file=sys.stderr)
         
-        # Call HuggingFace API via OpenAI client with proper parameters
+        # Call OpenAI Meta Proxy via OpenAI client with proper parameters
         response = openai_client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
