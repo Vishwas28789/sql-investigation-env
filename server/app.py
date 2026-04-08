@@ -118,7 +118,7 @@ class TaskSchema(BaseModel):
 
 
 # Endpoints
-@app.post("/reset", response_model=ResetResponse)
+@app.post("/reset")
 async def reset_environment(request: dict = Body(default={})):
     """Reset the environment and start a new episode for a specific task."""
     try:
@@ -141,15 +141,15 @@ async def reset_environment(request: dict = Body(default={})):
         observation.reward = max(0.01, min(0.99, 0.5))
         
         return {
-            'schema_info': observation.schema_info,
-            'business_question': observation.business_question,
-            'query_result': observation.query_result or '',
-            'error_message': observation.error_message or '',
-            'reward': 0.5,
-            'done': False,
-            'feedback': observation.feedback or '',
-            'episode_id': environment.episode_id,
-            'task_id': task_id
+            "schema_info": observation.schema_info,
+            "business_question": observation.business_question,
+            "query_result": observation.query_result or "",
+            "error_message": observation.error_message or "",
+            "reward": 0.5,
+            "done": False,
+            "feedback": observation.feedback or "",
+            "episode_id": environment.episode_id,
+            "task_id": task_id
         }
     except Exception as e:
         # Log error to stderr
