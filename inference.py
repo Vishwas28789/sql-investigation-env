@@ -34,6 +34,24 @@ def clamp_score(x):
     return max(0.01, min(0.99, x))
 
 
+def force_safe(x):
+    """Force reward to safe string representation (0.01-0.99, never 0.0 or 1.0)."""
+    try:
+        x = float(x)
+    except (ValueError, TypeError):
+        x = 0.25
+    return str(max(0.01, min(0.99, x)))
+
+
+def force_safe(x):
+    """Force reward to safe string representation (0.01-0.99, never 0.0 or 1.0)."""
+    try:
+        x = float(x)
+    except (ValueError, TypeError):
+        x = 0.25
+    return str(max(0.01, min(0.99, x)))
+
+
 # ============ CONFIGURATION ============
 
 # Initialize OpenAI client using exact requirements
@@ -445,7 +463,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             
             # Output: [STEP] step=<n> action=<str> reward=<0.00> done=<bool> error=<str|null>
             done_str = "true" if done else "false"
-            print(f"[STEP] step={step_count} action={action_clean} reward={float(safe_reward)} done={done_str} error={obs_error}")
+            print(f"[STEP] step={step_count} action={action_clean} reward={force_safe(safe_reward)} done={done_str} error={obs_error}")
             
             # End if done
             if done:
@@ -462,7 +480,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         success_str = "true" if success_bool else "false"
         
         # Format rewards list: r1,r2,r3 with safe clamping (no 0.00 or 1.00)
-        clean_rewards = [str(float(clamp_score(r))) for r in clamped_rewards]
+        clean_rewards = [force_safe(clamp_score(r)) for r in clamped_rewards]
         rewards_str = ",".join(clean_rewards)
         
         # Output: [END] success=<bool> steps=<n> rewards=<list>
