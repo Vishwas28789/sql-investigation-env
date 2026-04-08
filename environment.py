@@ -59,13 +59,13 @@ class SQLInvestigationEnvironment:
         # Get schema info for observation
         schema_info = self.db.get_schema_info()
         
-        # Return initial observation
+        # Return initial observation with reward=0.5 for reset
         return SQLObservation(
             schema_info=schema_info,
             business_question=self.current_task["business_question"],
             query_result=self.current_task["description"],
             error_message="",
-            reward=0.05,
+            reward=0.5,
             done=False,
             feedback="Task loaded. Examine the schema and submit your SQL query."
         )

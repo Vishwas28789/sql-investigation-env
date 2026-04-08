@@ -137,6 +137,9 @@ async def reset_environment(request: dict = Body(default={})):
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
         
+        # CRITICAL: Ensure reward is 0.5 and clamped to valid range
+        observation.reward = max(0.01, min(0.99, 0.5))
+        
         return ResetResponse(
             observation=observation,
             episode_id=environment.episode_id
