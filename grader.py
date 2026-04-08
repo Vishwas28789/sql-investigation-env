@@ -39,14 +39,14 @@ class Grader:
             task_id: Task ID (1, 2, or 3)
             
         Returns:
-            Score [0.0, 1.0] - deterministic and reproducible
+            Score (0.0, 1.0) - strictly between 0 and 1, deterministic and reproducible
         """
         try:
             # 1. LOAD TASK DEFINITION
             task = get_task(task_id)
             if not task or "expected_query_template" not in task:
                 print(f"[GRADER] Task {task_id}: Invalid task definition")
-                score = 0.0
+                score = 0.01
             else:
                 expected_query = task["expected_query_template"]
                 
@@ -68,12 +68,12 @@ class Grader:
                 # 3. VALIDATE QUERY EXECUTION
                 if user_error:
                     print(f"\n[RESULT] User query FAILED: {user_error}")
-                    print(f"[SCORE] 0.0 (syntax error - no reward)")
-                    score = 0.0
+                    print(f"[SCORE] 0.01 (syntax error - minimum reward)")
+                    score = 0.01
                 elif expected_error or not expected_rows or len(expected_rows) == 0:
                     print(f"\n[ERROR] Expected query failed - cannot grade")
-                    print(f"[SCORE] 0.0 (grading error)")
-                    score = 0.0
+                    print(f"[SCORE] 0.01 (grading error)")
+                    score = 0.01
                 else:
                     # 4. NORMALIZE BOTH RESULT SETS
                     user_normalized = self._normalize_rows(user_rows) if user_rows else []
@@ -90,7 +90,7 @@ class Grader:
                     # Exact match check
                     if user_set == expected_set:
                         print(f"\n[RESULT] EXACT MATCH - All rows and columns match perfectly")
-                        score = 0.95
+                        score = 0.99
                     else:
                         # Analyze differences for partial credit
                         matches = user_set & expected_set
@@ -108,7 +108,7 @@ class Grader:
 
         except Exception as e:
             print(f"\n[ERROR] Grader exception: {type(e).__name__}: {str(e)}")
-            score = 0.0
+            score = 0.01
 
         # ========== STRICT OPENENV BOUNDING (0, 1) ==========
         score = float(score)
@@ -221,7 +221,7 @@ class Grader:
         elif match_ratio >= 0.30:
             return 0.3
         else:
-            return 0.0
+            return 0.01
     
     def _calculate_smooth_score(self, match_ratio: float, extra_penalty: float) -> float:
         """
@@ -251,9 +251,9 @@ class Grader:
         # Calculate score with penalty
         score = base_reward + match_bonus - extra_penalty
         
-        # Ensure score stays in valid range [0.2, 1.0]
+        # Ensure score stays in valid range (0, 1) - strictly between
         # (Already handled above, but safety check)
-        score = max(0.2, min(0.95, score))
+        score = max(0.20, min(0.99, score))
         
         return score
     

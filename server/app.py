@@ -259,6 +259,7 @@ async def grade_query(request: GraderRequest):
         
         # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
+        score = max(0.01, min(0.99, score))  # Strict (0, 1) bounds
         
         print(f"STEP: Grade calculated: {score:.2f}")
         
@@ -309,6 +310,7 @@ async def run_baseline():
             
             # Grade the broken query using the task-specific environment's fresh database
             score = grader.grade(environment.db, broken_query, task_id)
+            score = max(0.01, min(0.99, score))  # Strict (0, 1) bounds
             
             # Store score with key task_1, task_2, task_3
             task_key = f"task_{task_id}"
@@ -318,6 +320,7 @@ async def run_baseline():
         
         # Calculate average score (guaranteed to have exactly 3 scores)
         average_score = sum(scores.values()) / len(scores)
+        average_score = max(0.01, min(0.99, average_score))  # Strict (0, 1) bounds
         
         # Return baseline response with deterministic order
         return BaselineResponse(
