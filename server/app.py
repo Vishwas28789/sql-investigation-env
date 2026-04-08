@@ -154,7 +154,7 @@ async def reset_environment(request: dict = Body(default={})):
             "business_question": observation.business_question,
             "query_result": observation.query_result or "",
             "error_message": observation.error_message or "",
-            "reward": safe_reward,
+            "reward": max(0.01, min(0.99, float(safe_reward or 0.25))),
             "done": False,
             "feedback": observation.feedback or "",
             "episode_id": environment.episode_id,
@@ -203,16 +203,22 @@ async def step_environment(request: dict = Body(default={})):
         
         # CRITICAL: Clamp reward strictly between 0.01 and 0.99 before returning
         reward_val = clamp_score(reward_val)
+        reward_val = max(0.01, min(0.99, float(reward_val or 0.25)))  # INLINE CLAMP
         
-        print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.4f} done={done_str} error={error_str}")
+        # CRITICAL: Also clamp observation reward inline
+        observation.reward = max(0.01, min(0.99, float(observation.reward or 0.25)))
+        
+        action_display = query[:50] if query else ""
+        print(f"[STEP] step={info['step']} action=\"{action_display}\" reward={reward_val:.4f} done={done_str} error={error_str}")
         
         if done_val:
-            print(f"[END] success={str(reward_val >= 0.5).lower()} steps={info['step']} score={reward_val:.4f} rewards={reward_val:.4f}")
+            success_val = "true" if reward_val >= 0.5 else "false"
+            print(f"[END] success={success_val} steps={info['step']} score={reward_val:.4f} rewards={reward_val:.4f}")
         
         # Return observation with all fields including reward, done, feedback
         return StepResponse(
             observation=observation,
-            reward=reward_val,
+            reward=max(0.01, min(0.99, float(reward_val or 0.25))),
             done=done_val,
             info=info
         )
@@ -284,7 +290,8 @@ async def grade_query(request: GraderRequest):
         
         # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
-        score = clamp_score(score)  # Strict (0, 1) bounds
+        score = clamp_score(score)  # First clamp
+        score = max(0.01, min(0.99, float(score or 0.25)))  # INLINE CLAMP for safety
         
         print(f"STEP: Grade calculated: {score:.4f}")
         
@@ -292,7 +299,7 @@ async def grade_query(request: GraderRequest):
         feedback = grader.get_feedback(score, "")
         print(f"END (score={score:.2f})")
         
-        return GraderResponse(score=score, feedback=feedback)
+        return GraderResponse(score=max(0.01, min(0.99, float(score or 0.25))), feedback=feedback)
     except HTTPException:
         raise
     except Exception as e:
@@ -335,7 +342,8 @@ async def run_baseline():
             
             # Grade the broken query using the task-specific environment's fresh database
             score = grader.grade(environment.db, broken_query, task_id)
-            score = clamp_score(score)  # Strict (0, 1) bounds
+            score = clamp_score(score)  # First clamp
+            score = max(0.01, min(0.99, float(score or 0.25)))  # INLINE CLAMP
             
             # Store score with key task_1, task_2, task_3
             task_key = f"task_{task_id}"
@@ -345,14 +353,15 @@ async def run_baseline():
         
         # Calculate average score (guaranteed to have exactly 3 scores)
         average_score = sum(scores.values()) / len(scores)
-        average_score = clamp_score(average_score)  # Strict (0, 1) bounds
+        average_score = clamp_score(average_score)  # First clamp
+        average_score = max(0.01, min(0.99, float(average_score or 0.25)))  # INLINE CLAMP
         
         # Return baseline response with deterministic order
         return BaselineResponse(
-            task_1=clamp_score(scores.get("task_1", 0.25)),
-            task_2=clamp_score(scores.get("task_2", 0.25)),
-            task_3=clamp_score(scores.get("task_3", 0.25)),
-            average=average_score
+            task_1=max(0.01, min(0.99, float(scores.get("task_1", 0.25)))),
+            task_2=max(0.01, min(0.99, float(scores.get("task_2", 0.25)))),
+            task_3=max(0.01, min(0.99, float(scores.get("task_3", 0.25)))),
+            average=max(0.01, min(0.99, float(average_score or 0.25)))
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
