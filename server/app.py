@@ -179,6 +179,9 @@ async def step_environment(request: dict = Body(default={})):
         reward_val = get_attr(observation, "reward", 0.05)
         done_str = "true" if done_val else "false"
         
+        # CRITICAL: Clamp reward strictly between 0.01 and 0.99 before returning
+        reward_val = max(0.01, min(0.99, float(reward_val)))
+        
         print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.2f} done={done_str} error={error_str}")
         
         if done_val:

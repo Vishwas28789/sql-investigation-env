@@ -91,6 +91,7 @@ class SQLInvestigationEnvironment:
                 done=True,
                 feedback="Error: Reset the environment first with reset(task_id)"
             )
+            error_obs.reward = max(0.01, min(0.99, error_obs.reward))
             return (error_obs, 0.05, True, {
                 "step": self.step_count,
                 "episode_id": self.episode_id,
@@ -99,16 +100,18 @@ class SQLInvestigationEnvironment:
         
         # If already done, return terminal observation
         if self.done:
+            done_obs = SQLObservation(
+                schema_info="",
+                business_question="",
+                query_result="",
+                error_message="Episode already finished",
+                reward=0.05,
+                done=True,
+                feedback="Episode complete. Start a new episode with reset()"
+            )
+            done_obs.reward = max(0.01, min(0.99, done_obs.reward))
             return (
-                SQLObservation(
-                    schema_info="",
-                    business_question="",
-                    query_result="",
-                    error_message="Episode already finished",
-                    reward=0.05,
-                    done=True,
-                    feedback="Episode complete. Start a new episode with reset()"
-                ),
+                done_obs,
                 0.05,
                 True,
                 {"step": self.step_count, "episode_id": self.episode_id, "error": "Episode finished"}
@@ -155,6 +158,9 @@ class SQLInvestigationEnvironment:
             done=self.done,
             feedback=feedback
         )
+        
+        # CRITICAL: Double-check reward is strictly between 0.01 and 0.99
+        observation.reward = max(0.01, min(0.99, float(observation.reward)))
         
         # Build info dict with debugging context
         info = {
