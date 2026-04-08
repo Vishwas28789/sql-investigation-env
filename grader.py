@@ -83,7 +83,7 @@ class Grader:
                     print(f"  User: {len(user_normalized)} unique rows")
                     print(f"  Expected: {len(expected_normalized)} unique rows")
                     
-                    # 5. CALCULATE MATCH SCORE - SMOOTH REWARD CURVE WITH MINIMUM FLOOR
+                    # 5. CALCULATE MATCH SCORE
                     user_set = set(user_normalized)
                     expected_set = set(expected_normalized)
                     
@@ -94,17 +94,20 @@ class Grader:
                     else:
                         # Analyze differences for partial credit
                         matches = user_set & expected_set
-                        extra_rows = user_set - expected_set
-                        
                         match_count = len(matches)
                         expected_count = len(expected_set)
-                        extra_count = len(extra_rows)
                         
                         match_ratio = match_count / expected_count if expected_count > 0 else 0
-                        extra_penalty = min(0.5, (extra_count / expected_count if expected_count > 0 else 0) * 0.3)
                         
-                        score = self._calculate_smooth_score(match_ratio, extra_penalty)
-                        print(f"\n[RESULT] Partial Match score: {score:.2f}")
+                        if match_ratio > 0.8:
+                            score = 0.75
+                            print(f"\n[RESULT] >80% Match score: {score:.2f}")
+                        elif match_ratio > 0:
+                            score = 0.45
+                            print(f"\n[RESULT] Partial Match score: {score:.2f}")
+                        else:
+                            score = 0.25
+                            print(f"\n[RESULT] Query runs but wrong score: {score:.2f}")
 
         except Exception as e:
             print(f"\n[ERROR] Grader exception: {type(e).__name__}: {str(e)}")
