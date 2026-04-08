@@ -140,10 +140,17 @@ async def reset_environment(request: dict = Body(default={})):
         # CRITICAL: Ensure reward is 0.5 and clamped to valid range
         observation.reward = max(0.01, min(0.99, 0.5))
         
-        return ResetResponse(
-            observation=observation,
-            episode_id=environment.episode_id
-        )
+        return {
+            'schema_info': observation.schema_info,
+            'business_question': observation.business_question,
+            'query_result': observation.query_result or '',
+            'error_message': observation.error_message or '',
+            'reward': 0.5,
+            'done': False,
+            'feedback': observation.feedback or '',
+            'episode_id': environment.episode_id,
+            'task_id': task_id
+        }
     except Exception as e:
         # Log error to stderr
         print(f"[ERROR /reset] {str(e)}", file=sys.stderr)
