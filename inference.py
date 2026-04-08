@@ -445,7 +445,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             
             # Output: [STEP] step=<n> action=<str> reward=<0.00> done=<bool> error=<str|null>
             done_str = "true" if done else "false"
-            print(f"[STEP] step={step_count} action={action_clean} reward={safe_reward:.4f} done={done_str} error={obs_error}")
+            print(f"[STEP] step={step_count} action={action_clean} reward={float(safe_reward)} done={done_str} error={obs_error}")
             
             # End if done
             if done:
@@ -462,7 +462,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         success_str = "true" if success_bool else "false"
         
         # Format rewards list: r1,r2,r3 with safe clamping (no 0.00 or 1.00)
-        rewards_str = ",".join(f"{clamp_score(r):.4f}" for r in clamped_rewards)
+        clean_rewards = [str(float(clamp_score(r))) for r in clamped_rewards]
+        rewards_str = ",".join(clean_rewards)
         
         # Output: [END] success=<bool> steps=<n> rewards=<list>
         print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
