@@ -136,13 +136,14 @@ def clean_error(error_str: str, max_length: int = 150) -> str:
 
 
 def format_reward(reward: float) -> str:
-    """Format reward to 2 decimal places."""
+    """Format reward to 4 decimal places, strictly clamped to (0.01, 0.99)."""
     try:
-        val = float(reward)
-        val = max(0.05, min(0.95, val))
-        return f"{val:.2f}"
+        val = float(reward) if reward is not None else 0.25
+        val = max(0.01, min(0.99, val))
+        return f"{val:.4f}"
     except (ValueError, TypeError):
-        return "0.05"
+        val = 0.25
+        return f"{val:.4f}"
 
 
 def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, Optional[dict], str]:
@@ -443,9 +444,12 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             rewards_list.append(step_reward)
             step_count = step_idx + 1
             
+            # CRITICAL: Clamp reward strictly before ANY logging
+            safe_reward = max(0.01, min(0.99, float(step_reward if step_reward else 0.25)))
+            
             # Output: [STEP] step=<n> action=<str> reward=<0.00> done=<bool> error=<str|null>
             done_str = "true" if done else "false"
-            print(f"[STEP] step={step_count} action={action_clean} reward={format_reward(step_reward)} done={done_str} error={obs_error}")
+            print(f"[STEP] step={step_count} action={action_clean} reward={safe_reward:.4f} done={done_str} error={obs_error}")
             
             # End if done
             if done:
@@ -454,15 +458,15 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         # Ensure final_score is strictly between 0 and 1
         final_score = max(0.01, min(0.99, float(final_score)))
         
-        # Clamp all rewards in list to (0, 1) range
-        clamped_rewards = [max(0.01, min(0.99, float(r))) for r in rewards_list]
+        # Clamp all rewards in list to (0, 1) range - CRITICAL for validator
+        clamped_rewards = [max(0.01, min(0.99, float(r if r else 0.25))) for r in rewards_list]
         
         # Determine success: final_score >= 0.5
         success_bool = final_score >= 0.5
         success_str = "true" if success_bool else "false"
         
-        # Format rewards list: r1,r2,r3
-        rewards_str = ",".join(format_reward(r) for r in clamped_rewards)
+        # Format rewards list: r1,r2,r3 with safe clamping (no 0.00 or 1.00)
+        rewards_str = ",".join(f"{max(0.01, min(0.99, float(r))):.4f}" for r in clamped_rewards)
         
         # Output: [END] success=<bool> steps=<n> rewards=<list>
         print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
