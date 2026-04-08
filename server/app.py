@@ -176,6 +176,9 @@ async def step_environment(request: dict = Body(default={})):
         action = SQLAction(query=query, task_id=task_id)
         observation, _, _, info = environment.step(action)
         
+        # CRITICAL: Clamp reward in observation object itself
+        observation.reward = max(0.01, min(0.99, float(observation.reward if observation.reward else 0.25)))
+        
         # [STEP] step=... action=... reward=... done=... error=...
         def get_attr(obj, attr, default=None):
             if hasattr(obj, attr):
