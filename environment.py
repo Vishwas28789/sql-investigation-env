@@ -10,6 +10,15 @@ from tasks import TASKS, get_task
 from grader import Grader
 
 
+def clamp_score(x):
+    """Clamp score to strictly between 0.01 and 0.99."""
+    try:
+        x = float(x)
+    except (ValueError, TypeError):
+        x = 0.25
+    return max(0.01, min(0.99, x))
+
+
 class SQLInvestigationEnvironment:
     """OpenEnv environment for SQL query debugging and optimization."""
     
@@ -82,17 +91,17 @@ class SQLInvestigationEnvironment:
         """
         # Safety check: ensure current_task is initialized
         if self.current_task is None:
+            safe_reward = clamp_score(0.25)
             error_obs = SQLObservation(
                 schema_info="",
                 business_question="",
                 query_result="",
                 error_message="No task initialized",
-                reward=0.05,
+                reward=safe_reward,
                 done=True,
                 feedback="Error: Reset the environment first with reset(task_id)"
             )
-            error_obs.reward = max(0.01, min(0.99, error_obs.reward))
-            return (error_obs, 0.05, True, {
+            return (error_obs, safe_reward, True, {
                 "step": self.step_count,
                 "episode_id": self.episode_id,
                 "error": "No task initialized"
@@ -100,19 +109,19 @@ class SQLInvestigationEnvironment:
         
         # If already done, return terminal observation
         if self.done:
+            safe_reward = clamp_score(0.25)
             done_obs = SQLObservation(
                 schema_info="",
                 business_question="",
                 query_result="",
                 error_message="Episode already finished",
-                reward=0.05,
+                reward=safe_reward,
                 done=True,
                 feedback="Episode complete. Start a new episode with reset()"
             )
-            done_obs.reward = max(0.01, min(0.99, done_obs.reward))
             return (
                 done_obs,
-                0.05,
+                safe_reward,
                 True,
                 {"step": self.step_count, "episode_id": self.episode_id, "error": "Episode finished"}
             )
@@ -135,8 +144,7 @@ class SQLInvestigationEnvironment:
         result_str = self._format_query_result(query_result)
         
         # Calculate reward: use grader score directly
-        reward = score
-        reward = max(0.01, min(0.99, reward))  # Clamp strictly between 0 and 1
+        reward = clamp_score(score)
         
         # Determine if episode is done
         if score >= 0.9 or self.step_count >= self.max_steps:
@@ -160,7 +168,7 @@ class SQLInvestigationEnvironment:
         )
         
         # CRITICAL: Double-check reward is strictly between 0.01 and 0.99
-        observation.reward = max(0.01, min(0.99, float(observation.reward)))
+        observation.reward = clamp_score(observation.reward)
         
         # Build info dict with debugging context
         info = {

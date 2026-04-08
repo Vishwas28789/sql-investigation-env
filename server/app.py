@@ -21,6 +21,15 @@ from grader import Grader
 from db import DatabaseManager
 
 
+def clamp_score(x):
+    """Clamp score to strictly between 0.01 and 0.99."""
+    try:
+        x = float(x)
+    except (ValueError, TypeError):
+        x = 0.25
+    return max(0.01, min(0.99, x))
+
+
 # Initialize per-task environments
 # This ensures each task has independent state with different database schemas
 task_environments: Dict[int, SQLInvestigationEnvironment] = {}
@@ -137,15 +146,15 @@ async def reset_environment(request: dict = Body(default={})):
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
         
-        # CRITICAL: Ensure reward is 0.5 and clamped to valid range
-        observation.reward = max(0.01, min(0.99, 0.5))
+        # CRITICAL: Ensure reward is always 0.5, clamped to valid range
+        safe_reward = clamp_score(0.5)
         
         return {
             "schema_info": observation.schema_info,
             "business_question": observation.business_question,
             "query_result": observation.query_result or "",
             "error_message": observation.error_message or "",
-            "reward": 0.5,
+            "reward": safe_reward,
             "done": False,
             "feedback": observation.feedback or "",
             "episode_id": environment.episode_id,
@@ -177,7 +186,7 @@ async def step_environment(request: dict = Body(default={})):
         observation, _, _, info = environment.step(action)
         
         # CRITICAL: Clamp reward in observation object itself
-        observation.reward = max(0.01, min(0.99, float(observation.reward if observation.reward else 0.25)))
+        observation.reward = clamp_score(observation.reward)
         
         # [STEP] step=... action=... reward=... done=... error=...
         def get_attr(obj, attr, default=None):
@@ -189,16 +198,16 @@ async def step_environment(request: dict = Body(default={})):
             
         error_str = get_attr(observation, "error_message", "null")
         done_val = get_attr(observation, "done", False)
-        reward_val = get_attr(observation, "reward", 0.05)
+        reward_val = get_attr(observation, "reward", 0.25)
         done_str = "true" if done_val else "false"
         
         # CRITICAL: Clamp reward strictly between 0.01 and 0.99 before returning
-        reward_val = max(0.01, min(0.99, float(reward_val)))
+        reward_val = clamp_score(reward_val)
         
-        print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.2f} done={done_str} error={error_str}")
+        print(f"[STEP] step={info['step']} action=\"{query[:50]}\" reward={reward_val:.4f} done={done_str} error={error_str}")
         
         if done_val:
-            print(f"[END] success={str(reward_val >= 0.5).lower()} steps={info['step']} score={reward_val:.2f} rewards={reward_val:.2f}")
+            print(f"[END] success={str(reward_val >= 0.5).lower()} steps={info['step']} score={reward_val:.4f} rewards={reward_val:.4f}")
         
         # Return observation with all fields including reward, done, feedback
         return StepResponse(
@@ -275,9 +284,9 @@ async def grade_query(request: GraderRequest):
         
         # Grade the query using the task-specific environment's database
         score = grader.grade(environment.db, request.query, request.task_id)
-        score = max(0.01, min(0.99, score))  # Strict (0, 1) bounds
+        score = clamp_score(score)  # Strict (0, 1) bounds
         
-        print(f"STEP: Grade calculated: {score:.2f}")
+        print(f"STEP: Grade calculated: {score:.4f}")
         
         # Get feedback (use empty string for error since we're just grading)
         feedback = grader.get_feedback(score, "")
@@ -326,7 +335,7 @@ async def run_baseline():
             
             # Grade the broken query using the task-specific environment's fresh database
             score = grader.grade(environment.db, broken_query, task_id)
-            score = max(0.01, min(0.99, score))  # Strict (0, 1) bounds
+            score = clamp_score(score)  # Strict (0, 1) bounds
             
             # Store score with key task_1, task_2, task_3
             task_key = f"task_{task_id}"
@@ -336,13 +345,13 @@ async def run_baseline():
         
         # Calculate average score (guaranteed to have exactly 3 scores)
         average_score = sum(scores.values()) / len(scores)
-        average_score = max(0.01, min(0.99, average_score))  # Strict (0, 1) bounds
+        average_score = clamp_score(average_score)  # Strict (0, 1) bounds
         
         # Return baseline response with deterministic order
         return BaselineResponse(
-            task_1=scores.get("task_1", 0.05),
-            task_2=scores.get("task_2", 0.05),
-            task_3=scores.get("task_3", 0.05),
+            task_1=clamp_score(scores.get("task_1", 0.25)),
+            task_2=clamp_score(scores.get("task_2", 0.25)),
+            task_3=clamp_score(scores.get("task_3", 0.25)),
             average=average_score
         )
     except Exception as e:

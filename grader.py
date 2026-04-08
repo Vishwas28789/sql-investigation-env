@@ -18,6 +18,15 @@ from tasks import get_task
 from typing import List, Tuple, Set
 
 
+def clamp_score(x):
+    """Clamp score to strictly between 0.01 and 0.99."""
+    try:
+        x = float(x)
+    except (ValueError, TypeError):
+        x = 0.25
+    return max(0.01, min(0.99, x))
+
+
 class Grader:
     """
     Deterministic, robust SQL query grader.
@@ -114,15 +123,7 @@ class Grader:
             score = 0.01
 
         # ========== STRICT OPENENV BOUNDING (0, 1) ==========
-        score = float(score)
-        if score <= 0:
-            score = 0.05
-        elif score >= 1:
-            score = 0.95
-        
-        # Final safety clamp
-        score = max(0.01, min(score, 0.99))
-        
+        score = clamp_score(score)
         print(f"[GRADER] FINAL CLAMPED SCORE: {score}")
         return score
     
