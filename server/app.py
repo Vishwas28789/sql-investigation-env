@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, Dict, Any
 
 from models import SQLAction, SQLObservation, SQLState
@@ -147,6 +147,13 @@ class GraderResponse(BaseModel):
         if v >= 1.0:
             return 0.99
         return max(0.01, min(0.99, v))
+    
+    @model_validator(mode='after')
+    def final_score_check(self):
+        """Final check: ensure score never escaped validation"""
+        if self.score <= 0.0 or self.score >= 1.0:
+            self.score = 0.25
+        return self
 
 
 class ResetResponse(BaseModel):
@@ -170,6 +177,13 @@ class ResetResponse(BaseModel):
         if v >= 1.0:
             return 0.99
         return max(0.01, min(0.99, v))
+    
+    @model_validator(mode='after')
+    def final_reward_check(self):
+        """Final check: ensure reward never escaped validation"""
+        if self.reward <= 0.0 or self.reward >= 1.0:
+            self.reward = 0.5
+        return self
 
 
 class StepResponse(BaseModel):
@@ -188,6 +202,16 @@ class StepResponse(BaseModel):
         if v >= 1.0:
             return 0.99
         return max(0.01, min(0.99, v))
+    
+    @model_validator(mode='after')
+    def final_reward_check(self):
+        """Final check: ensure all rewards are valid"""
+        if self.reward <= 0.0 or self.reward >= 1.0:
+            self.reward = 0.25
+        # Also check observation reward
+        if self.observation and (self.observation.reward <= 0.0 or self.observation.reward >= 1.0):
+            self.observation.reward = 0.25
+        return self
 
 
 class BaselineResponse(BaseModel):
@@ -206,6 +230,15 @@ class BaselineResponse(BaseModel):
         if v >= 1.0:
             return 0.99
         return max(0.01, min(0.99, v))
+    
+    @model_validator(mode='after')
+    def final_scores_check(self):
+        """Final check: ensure NO score escaped validation"""
+        for field_name in ['task_1', 'task_2', 'task_3', 'average']:
+            val = getattr(self, field_name, 0.5)
+            if val <= 0.0 or val >= 1.0:
+                setattr(self, field_name, 0.5)
+        return self
 
 
 class HealthResponse(BaseModel):
