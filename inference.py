@@ -12,36 +12,25 @@ Strictly adheres to OpenEnv evaluation rules:
 
 import os
 import sys
-from pathlib import Path
 import requests
 import json
 from typing import Optional, Tuple, List
 
-# Try to import OpenAI client
-try:
-    from openai import OpenAI, APIError
-except ImportError:
-    OpenAI = None
-    APIError = Exception
-
+from openai import OpenAI
 
 # ============ CONFIGURATION ============
 
 # Use environment-provided API credentials (REQUIRED by LiteLLM validator)
-# Prioritize API_KEY over HF_TOKEN for validator compatibility
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_KEY = os.environ["API_KEY"]  # Must exist - validator injects this
 
-# Initialize OpenAI client with provided credentials
-try:
-    openai_client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=API_KEY
-    )
-except Exception as e:
-    print(f"[DEBUG] Failed to initialize OpenAI client: {e}", file=sys.stderr)
-    openai_client = None
+client = OpenAI(
+    base_url=API_BASE_URL,
+    api_key=API_KEY
+)
+
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
 
 # Task name mapping
 TASK_NAMES = {
@@ -150,7 +139,7 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         Tuple of (success: bool, response_data: dict or None, error: str)
     """
     try:
-        url = f"{API_BASE_URL}{endpoint}"
+        url = f"{ENV_BASE_URL}{endpoint}"
         print(f"[DEBUG] Calling {method} {url} with data={data}", file=sys.stderr)
         
         if method == "GET":
@@ -191,99 +180,38 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         return False, None, clean_error(str(e))
 
 
-def generate_query_with_openai(task_desc: str, schema: str, previous_error: str = "", previous_result: str = "") -> str:
+def generate_query(schema_info, business_question, previous_result, error_message, step):
     """
-    Generate SQL query using OpenAI API with HuggingFace router.
+    Generate SQL query using OpenAI API through LiteLLM proxy validator.
+    NO fallback queries. NO silent failures.
     
     Args:
-        task_desc: Task description (business question)
-        schema: Database schema info
-        previous_error: Error message from previous attempt (if any)
-        previous_result: Result from previous attempt (if any)
+        schema_info: Database schema
+        business_question: Task description
+        previous_result: Result from previous query
+        error_message: Error from previous query
+        step: Current step number
         
     Returns:
-        Generated SQL query (from OpenAI) or fallback query on error
+        Generated SQL query (real API call - will raise exception on failure)
     """
-    # Only use fallback if API is definitively unavailable
-    if not openai_client:
-        print(f"[DEBUG] OpenAI client not available, using fallback", file=sys.stderr)
-        return "SELECT * FROM customers LIMIT 1"
-    
-    try:
-        print(f"[DEBUG] Using MODEL_NAME: {MODEL_NAME}", file=sys.stderr)
-        
-        # Build prompt with feedback from previous attempts
-        prompt = f"""You are an expert SQL engineer.
-
-Given:
-
+    prompt = f"""You are a SQL expert debugging queries.
 Database Schema:
-{schema}
+{schema_info}
 
-Business Question:
-{task_desc}
+Business Question: {business_question}
+Previous Query Result: {previous_result}
+Previous Error: {error_message}
 
-Your Task:
-Write the EXACT SQL query that correctly answers the business question.
-
-Rules:
-* Use correct JOIN conditions (match ON clauses carefully)
-* Use correct GROUP BY when aggregating
-* Use aggregation functions if needed (COUNT, SUM, AVG, MAX, MIN)
-* Do NOT use SELECT * (be specific about columns)
-* Do NOT use LIMIT unless explicitly required
-* Return ONLY the SQL query, no explanation
-* Remove any syntax errors or mistakes
-
-"""
-        
-        # Add context from previous attempt if available
-        if previous_error:
-            prompt += f"Previous attempt error: {previous_error}\nFix this mistake in your next query.\n\n"
-        if previous_result:
-            prompt += f"Previous result was incomplete or incorrect.\nWrite a better query.\n\n"
-        
-        prompt += "Generate the SQL query:"
-        
-        print(f"[DEBUG] Calling OpenAI with model={MODEL_NAME}", file=sys.stderr)
-        
-        # Call OpenAI API
-        response = openai_client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        # Extract raw response
-        raw_response = response.choices[0].message.content
-        print(f"[DEBUG] Raw API response: {raw_response[:200]}", file=sys.stderr)
-        
-        # Process response
-        query = raw_response.strip()
-        
-        # Clean up markdown code blocks if present
-        if query.startswith("```"):
-            lines = query.split("\n")
-            # Find the content between the markdown code blocks
-            content_lines = [line for line in lines[1:-1] if line.strip()]
-            query = "\n".join(content_lines).strip()
-        
-        query = query.strip()
-        
-        print(f"[DEBUG] Processed query: {query[:200]}", file=sys.stderr)
-        
-        # Return the generated query only if it's valid
-        if query and "SELECT" in query.upper():
-            print(f"[DEBUG] Query valid, returning: {query[:100]}...", file=sys.stderr)
-            return query
-        else:
-            # Invalid response from API - use fallback
-            print(f"[DEBUG] Invalid query response (no SELECT found), using fallback", file=sys.stderr)
-            return "SELECT * FROM customers LIMIT 1"
+Write ONLY a single SQL SELECT query. No explanation. No markdown. Just SQL."""
     
-    except Exception as e:
-        # API call failed - print exception clearly then use fallback
-        print(f"[DEBUG] API Exception: {type(e).__name__}: {str(e)}", file=sys.stderr)
-        return "SELECT * FROM customers LIMIT 1"
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200,
+        temperature=0.1
+    )
+    return response.choices[0].message.content.strip()
 
 
 # ============ MAIN INFERENCE FUNCTION ============
@@ -342,13 +270,33 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             # Debug: Entering step
             print(f"[DEBUG] Entering step {step_idx + 1}", file=sys.stderr)
             
-            # Generate query using OpenAI with feedback from previous attempts
-            action_query = generate_query_with_openai(
-                business_question, 
-                schema_info,
-                previous_error=previous_error,
-                previous_result=previous_result
-            )
+            # Generate query using OpenAI through validator proxy
+            # NO fallback - if API fails, print error and emit [STEP] with reward=0.00
+            action_query = ""
+            try:
+                action_query = generate_query(
+                    schema_info,
+                    business_question,
+                    previous_result,
+                    previous_error,
+                    step_idx + 1
+                )
+                print(f"[DEBUG] Generated query: {action_query[:200]}", file=sys.stderr)
+            except Exception as e:
+                # API call failed - required by validator: print error and continue
+                print(f"[ERROR] Failed to generate query: {type(e).__name__}: {str(e)}", file=sys.stderr)
+                action_query = ""
+            
+            # If query generation failed, emit [STEP] with error and continue
+            if not action_query:
+                print(f"[DEBUG] Query generation failed, emitting zero-reward step", file=sys.stderr)
+                action_clean = "[QUERY_GENERATION_FAILED]"
+                step_count = step_idx + 1
+                rewards_list.append(0.00)
+                reward_str = format_reward(0.00)
+                print(f"[STEP] step={step_count} action={action_clean} reward={reward_str} done=false error=query_generation_failed")
+                break
+            
             action_clean = clean_action(action_query)
             
             # Execute step via HTTP
