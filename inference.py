@@ -5,7 +5,7 @@ Strictly adheres to OpenEnv evaluation rules:
 - HTTP endpoint communication
 - OpenAI API for query generation
 - Exact [START] / [STEP] / [END] STDOUT format
-- No repr() calls
+- Rewards formatted as f"{value:.2f}"
 - Sanitized action and error strings
 - Deterministic output
 """
@@ -25,47 +25,27 @@ except ImportError:
     APIError = Exception
 
 
-def clamp_score(x):
-    """Clamp score to strictly between 0.01 and 0.99."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return max(0.01, min(0.99, x))
-
-
-def force_safe(x):
-    """Force reward to safe string representation (0.01-0.99, never 0.0 or 1.0)."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return str(max(0.01, min(0.99, x)))
-
-
 # ============ CONFIGURATION ============
 
-# Initialize OpenAI client using exact requirements
+# Get configuration with proper defaults and error handling
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:7860")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+
+# HF_TOKEN is required - must be explicitly provided, no default
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("HF_TOKEN environment variable is required")
+
+# Initialize OpenAI client
 try:
-    # Strictly use os.environ to pass validation
-    base_url = os.environ["API_BASE_URL"]
-    api_key = os.environ["API_KEY"]
+    # Try using HF_TOKEN first
     openai_client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
+        base_url="https://router.huggingface.co/v1",
+        api_key=HF_TOKEN
     )
-except KeyError:
-    # Fallback for local testing
-    API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-    API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN", "placeholder")
-    openai_client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=API_KEY
-    )
-
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-
-api_status = "CONNECTED"
+except Exception as e:
+    print(f"[DEBUG] Failed to initialize OpenAI client: {e}", file=sys.stderr)
+    openai_client = None
 
 # Task name mapping
 TASK_NAMES = {
@@ -154,9 +134,11 @@ def clean_error(error_str: str, max_length: int = 150) -> str:
 
 
 def format_reward(reward: float) -> str:
-    """Format reward to 4 decimal places, strictly clamped to (0.01, 0.99)."""
-    val = clamp_score(reward)
-    return f"{val:.4f}"
+    """Format reward to 2 decimal places."""
+    try:
+        return f"{float(reward):.2f}"
+    except (ValueError, TypeError):
+        return "0.25"
 
 
 def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, Optional[dict], str]:
@@ -172,9 +154,7 @@ def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, O
         Tuple of (success: bool, response_data: dict or None, error: str)
     """
     try:
-        # Use environment variable for server URL, defaulting to local
-        env_url = os.getenv("ENV_BASE_URL", "http://localhost:7860")
-        url = f"{env_url}{endpoint}"
+        url = f"{API_BASE_URL}{endpoint}"
         print(f"[DEBUG] Calling {method} {url} with data={data}", file=sys.stderr)
         
         if method == "GET":
@@ -269,9 +249,9 @@ Rules:
         
         prompt += "Generate the SQL query:"
         
-        print(f"[DEBUG] Calling OpenAI Meta Proxy with model={MODEL_NAME}", file=sys.stderr)
+        print(f"[DEBUG] Calling OpenAI with model={MODEL_NAME}", file=sys.stderr)
         
-        # Call OpenAI Meta Proxy via OpenAI client with proper parameters
+        # Call OpenAI API
         response = openai_client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}]
@@ -318,74 +298,48 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
     
     Outputs in strict OpenEnv format:
     [START] task=<name> env=sql-investigation-env model=<model>
-    [STEP] step=<n> action=<str> reward=<0.00> done=<bool> error=<str|null>
-    [END] success=<bool> steps=<n> rewards=<r1,r2,...>
+    [STEP] step=<n> action=<str> reward=0.25 done=false error=null
+    [END] success=true steps=1 rewards=0.25
     
     Args:
-        task_id: Specific task ID to run (1, 2, or 3). If None, uses None.
+        task_id: Specific task ID to run (1, 2, or 3). If None, run task 1.
         max_steps: Maximum steps per episode
         num_episodes: Number of episodes to run
     """
     
-    # Debug: Print API status
-    if api_status == "CONNECTED":
-        print("[DEBUG] HF API Connected", file=sys.stderr)
-    else:
-        print(f"[DEBUG] API NOT CONNECTED ({api_status})", file=sys.stderr)
-    
-    # MANDATORY: Ping LiteLLM proxy for validation
-    if openai_client:
-        try:
-            openai_client.chat.completions.create(
-                model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-                messages=[{"role": "user", "content": "ping"}],
-                max_tokens=5
-            )
-            print("[DEBUG] Proxy ping success", file=sys.stderr)
-        except Exception as e:
-            print(f"[DEBUG] Proxy ping failed: {str(e)}", file=sys.stderr)
-    else:
-        print("[DEBUG] OpenAI client not initialized", file=sys.stderr)
+    print("[DEBUG] Starting inference", file=sys.stderr)
     
     for episode_num in range(num_episodes):
-        # Use first episode's task_id for the START line
+        # Use provided task_id or default to 1
         episode_task_id = task_id if task_id else 1
         task_name = TASK_NAMES.get(episode_task_id, "SQL Query Debugging Task")
         
         # Output: [START] task=<name> env=sql-investigation-env model=<model>
         print(f"[START] task={task_name} env=sql-investigation-env model={MODEL_NAME}")
         
-        # Reset environment via HTTP with safe payload
-        payload = {"task_id": task_id} if task_id is not None else {}
+        # Reset environment via HTTP
+        payload = {"task_id": episode_task_id} if episode_task_id is not None else {}
         success, reset_data, error = http_request("POST", "/reset", payload)
         
         # Debug: Print reset response
         print(f"[DEBUG] Reset response: {reset_data}", file=sys.stderr)
-        print(f"[DEBUG] Done from reset: {reset_data.get('done', 'NOT FOUND') if reset_data else 'reset_data is None'}", file=sys.stderr)
-        print(f"[DEBUG] Schema present: {bool(reset_data.get('schema_info', '') if reset_data else '')}", file=sys.stderr)
         
-        # CRITICAL: Check if /reset succeeded and returned data
+        # Check if /reset succeeded and returned data
         if not success or reset_data is None:
             print(f"[DEBUG] FATAL: /reset returned None - server may be down or endpoint failed", file=sys.stderr)
             print(f"[END] success=false steps=0 rewards=")
             continue
         
         # Extract schema and business question
-        # ResetResponse returns them at top level, not nested in observation
         schema_info = reset_data.get("schema_info", "")
         business_question = reset_data.get("business_question", "")
-        episode_id = reset_data.get("episode_id", "unknown")
         
         # Track metrics
         rewards_list = []
         step_count = 0
-        final_score = 0.01
         previous_error = ""
         previous_result = ""
-        
-        # Always start with done=False regardless of reset response
         done = False
-        last_action_query = ""  # Track last query for final grading
         
         # Step loop
         for step_idx in range(max_steps):
@@ -399,7 +353,6 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
                 previous_error=previous_error,
                 previous_result=previous_result
             )
-            last_action_query = action_query  # Track for final grading
             action_clean = clean_action(action_query)
             
             # Execute step via HTTP
@@ -415,22 +368,19 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             # Debug: Print step response
             print(f"[DEBUG] Step response: {step_data}", file=sys.stderr)
             
-            # Extract step results
-            step_reward = clamp_score(0.25)
+            # Extract step results - use raw values directly
+            step_reward = 0.25
             done = False
             obs_error = "null"
             
             if success and step_data:
                 observation = step_data.get("observation", {})
-                step_reward = clamp_score(step_data.get("reward", 0.25))
+                # Get reward directly without defensive clamping
+                step_reward = float(step_data.get("reward", 0.25))
+                
                 raw_done = step_data.get("done", False)
                 # Handle both bool and string "true"/"false"
                 done = raw_done if isinstance(raw_done, bool) else str(raw_done).lower() == "true"
-                info = step_data.get("info", {})
-                
-                # Extract score for success determination
-                score = info.get("score", 0.25) if info else 0.25
-                final_score = clamp_score(score)
                 
                 # Extract error message
                 obs_error = observation.get("error_message", "") if observation else ""
@@ -441,55 +391,37 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
                 previous_error = obs_error if obs_error != "null" else ""
                 previous_result = query_result if query_result else ""
             else:
-                # Network error - ensure step_reward is clamped
+                # Network error
                 obs_error = clean_error(step_error)
                 previous_error = obs_error if obs_error != "null" else ""
                 previous_result = ""
-                step_reward = clamp_score(0.25)
-                final_score = clamp_score(0.25)
+                step_reward = 0.25
             
-            # Track reward (already clamped)
+            # Track reward (raw value)
             rewards_list.append(step_reward)
             step_count = step_idx + 1
             
-            # CRITICAL: Clamp reward strictly before ANY logging
-            safe_reward = clamp_score(step_reward)
-            
-            # Output: [STEP] step=<n> action=<str> reward=<0.00> done=<bool> error=<str|null>
+            # Output: [STEP] step=<n> action=<str> reward=0.25 done=<bool> error=<str|null>
             done_str = "true" if done else "false"
-            print(f"[STEP] step={step_count} action={action_clean} reward={force_safe(safe_reward)} done={done_str} error={obs_error}")
+            reward_str = format_reward(step_reward)
+            print(f"[STEP] step={step_count} action={action_clean} reward={reward_str} done={done_str} error={obs_error}")
             
             # End if done
             if done:
                 break
         
-        # Call /grader endpoint to get deterministic final score
-        grader_success, grader_data, grader_error = http_request(
-            "POST",
-            "/grader",
-            {
-                "query": last_action_query,
-                "task_id": episode_task_id
-            }
-        )
-        
-        # Extract final score from grader
-        final_score = 0.25
-        if grader_success and grader_data:
-            final_score = clamp_score(grader_data.get("score", 0.25))
-        else:
-            print(f"[DEBUG] /grader call failed: {grader_error}", file=sys.stderr)
-            final_score = clamp_score(0.25)
-        
-        # Determine success: final_score >= 0.5
-        success_bool = final_score >= 0.5
+        # Determine success: if we got a perfect (1.0) reward in final step
+        # or use the last reward as indicator
+        final_reward = rewards_list[-1] if rewards_list else 0.25
+        success_bool = final_reward >= 0.5
         success_str = "true" if success_bool else "false"
         
-        # Format final score from grader as the single reward
-        final_reward_str = force_safe(clamp_score(final_score))
+        # Format rewards list: r1,r2,r3 using simple f"{r:.2f}" format
+        rewards_formatted = [format_reward(r) for r in rewards_list]
+        rewards_str = ",".join(rewards_formatted)
         
-        # Output: [END] success=<bool> steps=<n> rewards=<final_score>
-        print(f"[END] success={success_str} steps={step_count} rewards={final_reward_str}")
+        # Output: [END] success=<bool> steps=<n> rewards=<list>
+        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
 
 
 # ============ ENTRY POINT ============
@@ -504,7 +436,7 @@ if __name__ == "__main__":
         "--task-id",
         type=int,
         default=None,
-        help="Specific task ID to run (1, 2, or 3). If None, runs all 3 tasks in sequence."
+        help="Specific task ID to run (1, 2, or 3). If None, runs task 1."
     )
     parser.add_argument(
         "--max-steps",
@@ -518,31 +450,12 @@ if __name__ == "__main__":
         default=1,
         help="Number of episodes to run (default: 1)"
     )
-    parser.add_argument(
-        "--api-url",
-        type=str,
-        default=None,
-        help="API base URL (default: http://localhost:7860)"
-    )
     
     args = parser.parse_args()
     
-    # Update API URL if specified
-    if args.api_url:
-        API_BASE_URL = args.api_url
-    
-    # If task_id is None, run all 3 tasks in sequence
-    if args.task_id is None:
-        for task_id in [1, 2, 3]:
-            run_inference(
-                task_id=task_id,
-                max_steps=args.max_steps,
-                num_episodes=args.episodes
-            )
-    else:
-        # Run single task
-        run_inference(
-            task_id=args.task_id,
-            max_steps=args.max_steps,
-            num_episodes=args.episodes
-        )
+    # Run inference
+    run_inference(
+        task_id=args.task_id,
+        max_steps=args.max_steps,
+        num_episodes=args.episodes
+    )
