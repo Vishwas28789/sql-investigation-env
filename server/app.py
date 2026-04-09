@@ -1,4 +1,4 @@
-"""FastAPI app for SQL Investigation OpenEnv environment. (Redeploy trigger)"""
+"""FastAPI app for SQL Investigation OpenEnv environment. (Redeploy trigger v2 - 2026-04-09)"""
 
 import sys
 import os
