@@ -28,8 +28,9 @@ except ImportError:
 # ============ CONFIGURATION ============
 
 # Use environment-provided API credentials (REQUIRED by LiteLLM validator)
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
+# Prioritize API_KEY over HF_TOKEN for validator compatibility
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
 # Initialize OpenAI client with provided credentials
