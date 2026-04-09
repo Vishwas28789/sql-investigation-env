@@ -385,6 +385,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         
         # Always start with done=False regardless of reset response
         done = False
+        last_action_query = ""  # Track last query for final grading
         
         # Step loop
         for step_idx in range(max_steps):
@@ -398,6 +399,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
                 previous_error=previous_error,
                 previous_result=previous_result
             )
+            last_action_query = action_query  # Track for final grading
             action_clean = clean_action(action_query)
             
             # Execute step via HTTP
@@ -461,39 +463,33 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             if done:
                 break
         
-        # Ensure final_score is strictly between 0 and 1
-        final_score = clamp_score(final_score)
+        # Call /grader endpoint to get deterministic final score
+        grader_success, grader_data, grader_error = http_request(
+            "POST",
+            "/grader",
+            {
+                "query": last_action_query,
+                "task_id": episode_task_id
+            }
+        )
         
-        # Clamp all rewards in list to (0, 1) range - CRITICAL for validator
-        clamped_rewards = [clamp_score(r) for r in rewards_list]
+        # Extract final score from grader
+        final_score = 0.25
+        if grader_success and grader_data:
+            final_score = clamp_score(grader_data.get("score", 0.25))
+        else:
+            print(f"[DEBUG] /grader call failed: {grader_error}", file=sys.stderr)
+            final_score = clamp_score(0.25)
         
         # Determine success: final_score >= 0.5
         success_bool = final_score >= 0.5
         success_str = "true" if success_bool else "false"
         
-        # Format rewards list: r1,r2,r3 with safe clamping (no 0.00 or 1.00)
-        clean_rewards = [force_safe(clamp_score(r)) for r in clamped_rewards]
-        rewards_str = ",".join(clean_rewards)
+        # Format final score from grader as the single reward
+        final_reward_str = force_safe(clamp_score(final_score))
         
-        # ULTRA-DEFENSIVE: Post-process rewards string to ensure 0.0 and 1.0 never appear
-        # Replace any remaining 0.0 or 1.0 with safe values
-        rewards_str = rewards_str.replace(",0.0,", ",0.01,")
-        rewards_str = rewards_str.replace(",1.0,", ",0.99,")
-        if rewards_str.startswith("0.0,"):
-            rewards_str = "0.01" + rewards_str[3:]
-        if rewards_str.startswith("1.0,"):
-            rewards_str = "0.99" + rewards_str[3:]
-        if rewards_str.endswith(",0.0"):
-            rewards_str = rewards_str[:-3] + ",0.01"
-        if rewards_str.endswith(",1.0"):
-            rewards_str = rewards_str[:-3] + ",0.99"
-        if rewards_str == "0.0":
-            rewards_str = "0.01"
-        if rewards_str == "1.0":
-            rewards_str = "0.99"
-        
-        # Output: [END] success=<bool> steps=<n> rewards=<list>
-        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
+        # Output: [END] success=<bool> steps=<n> rewards=<final_score>
+        print(f"[END] success={success_str} steps={step_count} rewards={final_reward_str}")
 
 
 # ============ ENTRY POINT ============
