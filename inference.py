@@ -23,7 +23,9 @@ from openai import OpenAI
 # Use environment-provided API credentials (REQUIRED by LiteLLM validator)
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-API_KEY = os.environ["API_KEY"]  # Must exist - validator injects this
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+if not API_KEY:
+    raise ValueError("API_KEY or HF_TOKEN environment variable is required")
 
 client = OpenAI(
     base_url=API_BASE_URL,

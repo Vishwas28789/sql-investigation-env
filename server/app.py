@@ -252,15 +252,6 @@ class HealthResponse(BaseModel):
     status: str
 
 
-class TaskSchema(BaseModel):
-    id: int
-    difficulty: str
-    description: str
-    business_question: str
-    hint: str
-    action_schema: Dict[str, str]
-
-
 # Endpoints
 @app.post("/reset", response_model=ResetResponse)
 async def reset_environment(request: dict = Body(default={})):
@@ -389,23 +380,27 @@ async def get_tasks():
     try:
         task_list = []
         for task in TASKS:
-            task_schema = TaskSchema(
-                id=task["id"],
-                difficulty=task["difficulty"],
-                description=task["description"],
-                business_question=task["business_question"],
-                hint=task["hint"],
-                action_schema={
-                    "query": "string - SQL query to execute",
-                    "task_id": "integer - task ID (1, 2, or 3)"
+            task_list.append({
+                "id": task["id"],
+                "name": task.get("name", f"Task {task['id']}"),
+                "difficulty": task["difficulty"],
+                "description": task["description"],
+                "business_question": task["business_question"],
+                "hint": task["hint"],
+                "has_grader": True,
+                "grader_type": "execution_based",
+                "score_range": {"min": 0.01, "max": 0.99},
+                "action_schema": {
+                    "query": "string",
+                    "task_id": "integer"
                 }
-            )
-            task_list.append(task_schema)
+            })
         return {
             "tasks": task_list,
+            "total_tasks": len(task_list),
             "action_schema": {
-                "query": "string - SQL query to execute",
-                "task_id": "integer - task ID (1, 2, or 3)"
+                "query": "string",
+                "task_id": "integer"
             }
         }
     except Exception as e:
@@ -416,9 +411,6 @@ async def get_tasks():
 async def grade_query(request: GraderRequest):
     """Grade a SQL query for a specific task."""
     try:
-        print("START")
-        print(f"STEP: Grading query for task {request.task_id}")
-        
         # Validate task exists
         task = get_task(request.task_id)
         if not task:
@@ -433,11 +425,8 @@ async def grade_query(request: GraderRequest):
         score = safe_score(score)  # safe_score wrapper
         score = max(0.01, min(0.99, float(score or 0.25)))  # TRIPLE safety
         
-        print(f"STEP: Grade calculated: {score:.4f}")
-        
         # Get feedback (use empty string for error since we're just grading)
         feedback = grader.get_feedback(score, "")
-        print(f"END (score={score:.2f})")
         
         return GraderResponse(score=safe_score(max(0.01, min(0.99, float(score or 0.25)))), feedback=feedback)
     except HTTPException:
@@ -464,14 +453,9 @@ async def run_baseline():
         scores = {}
         
         # Evaluate each task's broken query (deterministic: task 1, 2, 3)
-        print("START")
-        print("STEP: Running baseline evaluation")
-        
-        # Evaluate each task's broken query (deterministic: task 1, 2, 3)
         for task in TASKS:
             task_id = task["id"]
             broken_query = task["broken_query"]
-            print(f"STEP: Evaluating Task {task_id}")
             
             # Get or create environment for this specific task
             environment = get_or_create_environment(task_id)
@@ -489,8 +473,6 @@ async def run_baseline():
             # Store score with key task_1, task_2, task_3
             task_key = f"task_{task_id}"
             scores[task_key] = score
-        
-        print("END")
         
         # Calculate average score (guaranteed to have exactly 3 scores)
         average_score = sum(scores.values()) / len(scores)
