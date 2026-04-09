@@ -27,21 +27,16 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 
-# Get configuration with proper defaults and error handling
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:7860")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+# Use environment-provided API credentials (REQUIRED by LiteLLM validator)
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 
-# HF_TOKEN is required - must be explicitly provided, no default
-HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN:
-    raise ValueError("HF_TOKEN environment variable is required")
-
-# Initialize OpenAI client
+# Initialize OpenAI client with provided credentials
 try:
-    # Try using HF_TOKEN first
     openai_client = OpenAI(
-        base_url="https://router.huggingface.co/v1",
-        api_key=HF_TOKEN
+        base_url=API_BASE_URL,
+        api_key=API_KEY
     )
 except Exception as e:
     print(f"[DEBUG] Failed to initialize OpenAI client: {e}", file=sys.stderr)
