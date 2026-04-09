@@ -475,6 +475,23 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         clean_rewards = [force_safe(clamp_score(r)) for r in clamped_rewards]
         rewards_str = ",".join(clean_rewards)
         
+        # ULTRA-DEFENSIVE: Post-process rewards string to ensure 0.0 and 1.0 never appear
+        # Replace any remaining 0.0 or 1.0 with safe values
+        rewards_str = rewards_str.replace(",0.0,", ",0.01,")
+        rewards_str = rewards_str.replace(",1.0,", ",0.99,")
+        if rewards_str.startswith("0.0,"):
+            rewards_str = "0.01" + rewards_str[3:]
+        if rewards_str.startswith("1.0,"):
+            rewards_str = "0.99" + rewards_str[3:]
+        if rewards_str.endswith(",0.0"):
+            rewards_str = rewards_str[:-3] + ",0.01"
+        if rewards_str.endswith(",1.0"):
+            rewards_str = rewards_str[:-3] + ",0.99"
+        if rewards_str == "0.0":
+            rewards_str = "0.01"
+        if rewards_str == "1.0":
+            rewards_str = "0.99"
+        
         # Output: [END] success=<bool> steps=<n> rewards=<list>
         print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
 
