@@ -27,6 +27,19 @@ def clamp_score(x):
     return max(0.01, min(0.99, x))
 
 
+def safe_score(x):
+    """Force score to safe range (0.01-0.99), never 0.0 or 1.0."""
+    try:
+        x = float(x)
+    except:
+        x = 0.25
+    if x <= 0.0:
+        return 0.01
+    if x >= 1.0:
+        return 0.99
+    return x
+
+
 class Grader:
     """
     Deterministic, robust SQL query grader.
@@ -123,7 +136,10 @@ class Grader:
             score = 0.01
 
         # ========== STRICT OPENENV BOUNDING (0, 1) ==========
+        # Apply TRIPLE safeguard: clamp_score -> safe_score -> max/min
         score = clamp_score(score)
+        score = safe_score(score)
+        score = max(0.01, min(0.99, float(score or 0.25)))
         print(f"[GRADER] FINAL CLAMPED SCORE: {score}")
         return score
     

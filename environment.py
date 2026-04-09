@@ -19,6 +19,19 @@ def clamp_score(x):
     return max(0.01, min(0.99, x))
 
 
+def safe_score(x):
+    """Force score to safe range (0.01-0.99), never 0.0 or 1.0."""
+    try:
+        x = float(x)
+    except:
+        x = 0.25
+    if x <= 0.0:
+        return 0.01
+    if x >= 1.0:
+        return 0.99
+    return x
+
+
 class SQLInvestigationEnvironment:
     """OpenEnv environment for SQL query debugging and optimization."""
     
@@ -69,12 +82,14 @@ class SQLInvestigationEnvironment:
         schema_info = self.db.get_schema_info()
         
         # Return initial observation with reward=0.5 for reset
+        # CRITICAL: Wrap reward in safe_score to guarantee (0.01, 0.99)
+        reset_reward = safe_score(0.5)  # 0.5 -> safe_score -> 0.5 (still valid)
         return SQLObservation(
             schema_info=schema_info,
             business_question=self.current_task["business_question"],
             query_result=self.current_task["description"],
             error_message="",
-            reward=0.5,
+            reward=reset_reward,
             done=False,
             feedback="Task loaded. Examine the schema and submit your SQL query."
         )
@@ -91,7 +106,7 @@ class SQLInvestigationEnvironment:
         """
         # Safety check: ensure current_task is initialized
         if self.current_task is None:
-            safe_reward = clamp_score(0.25)
+            safe_reward = safe_score(0.25)  # CRITICAL: wrap in safe_score
             error_obs = SQLObservation(
                 schema_info="",
                 business_question="",
@@ -109,7 +124,7 @@ class SQLInvestigationEnvironment:
         
         # If already done, return terminal observation
         if self.done:
-            safe_reward = clamp_score(0.25)
+            safe_reward = safe_score(0.25)  # CRITICAL: wrap in safe_score
             done_obs = SQLObservation(
                 schema_info="",
                 business_question="",
@@ -143,8 +158,11 @@ class SQLInvestigationEnvironment:
         # Convert query result to string for observation
         result_str = self._format_query_result(query_result)
         
-        # Calculate reward: use grader score directly
+        # Calculate reward: Apply TRIPLE safety wrapper
+        # score -> clamp_score -> safe_score -> max/min
         reward = clamp_score(score)
+        reward = safe_score(reward)
+        reward = max(0.01, min(0.99, float(reward or 0.25)))
         
         # Determine if episode is done
         if score >= 0.9 or self.step_count >= self.max_steps:
@@ -162,13 +180,13 @@ class SQLInvestigationEnvironment:
             business_question=self.current_task["business_question"],
             query_result=result_str,
             error_message=error,
-            reward=reward,
+            reward=safe_score(reward),  # CRITICAL: wrap final reward in safe_score
             done=self.done,
             feedback=feedback
         )
         
         # CRITICAL: Double-check reward is strictly between 0.01 and 0.99
-        observation.reward = clamp_score(observation.reward)
+        observation.reward = max(0.01, min(0.99, float(safe_score(observation.reward))))
         
         # Build info dict with debugging context
         info = {
