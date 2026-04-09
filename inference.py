@@ -43,15 +43,6 @@ def force_safe(x):
     return str(max(0.01, min(0.99, x)))
 
 
-def force_safe(x):
-    """Force reward to safe string representation (0.01-0.99, never 0.0 or 1.0)."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return str(max(0.01, min(0.99, x)))
-
-
 # ============ CONFIGURATION ============
 
 # Initialize OpenAI client using exact requirements

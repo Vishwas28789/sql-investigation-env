@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, Any
 
 from models import SQLAction, SQLObservation, SQLState
@@ -105,6 +105,17 @@ class GraderRequest(BaseModel):
 class GraderResponse(BaseModel):
     score: float
     feedback: str
+    
+    @field_validator('score')
+    @classmethod
+    def validate_score(cls, v):
+        """Ensure score is ALWAYS strictly between 0.01 and 0.99."""
+        v = float(v)
+        if v <= 0.0:
+            return 0.01
+        if v >= 1.0:
+            return 0.99
+        return max(0.01, min(0.99, v))
 
 
 class ResetResponse(BaseModel):
@@ -117,6 +128,17 @@ class StepResponse(BaseModel):
     reward: float
     done: bool
     info: Dict[str, Any]
+    
+    @field_validator('reward')
+    @classmethod
+    def validate_reward(cls, v):
+        """Ensure reward is ALWAYS strictly between 0.01 and 0.99."""
+        v = float(v)
+        if v <= 0.0:
+            return 0.01
+        if v >= 1.0:
+            return 0.99
+        return max(0.01, min(0.99, v))
 
 
 class BaselineResponse(BaseModel):
@@ -124,6 +146,17 @@ class BaselineResponse(BaseModel):
     task_2: float
     task_3: float
     average: float
+    
+    @field_validator('task_1', 'task_2', 'task_3', 'average')
+    @classmethod
+    def validate_scores(cls, v):
+        """Ensure all scores are ALWAYS strictly between 0.01 and 0.99."""
+        v = float(v)
+        if v <= 0.0:
+            return 0.01
+        if v >= 1.0:
+            return 0.99
+        return max(0.01, min(0.99, v))
 
 
 class HealthResponse(BaseModel):
