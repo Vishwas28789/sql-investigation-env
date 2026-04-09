@@ -371,8 +371,9 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             continue
         
         # Extract schema and business question
-        schema_info = reset_data.get("observation", {}).get("schema_info", "")
-        business_question = reset_data.get("observation", {}).get("business_question", "")
+        # ResetResponse returns them at top level, not nested in observation
+        schema_info = reset_data.get("schema_info", "")
+        business_question = reset_data.get("business_question", "")
         episode_id = reset_data.get("episode_id", "unknown")
         
         # Track metrics
