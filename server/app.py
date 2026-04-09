@@ -47,6 +47,9 @@ def safe_score(x):
 # This ensures each task has independent state with different database schemas
 task_environments: Dict[int, SQLInvestigationEnvironment] = {}
 
+# Track the last task that was reset (for /state endpoint)
+last_reset_task_id: int = 1
+
 def get_or_create_environment(task_id: int) -> SQLInvestigationEnvironment:
     """Get or create an environment for a specific task with its own database schema."""
     if task_id not in task_environments:
@@ -262,6 +265,7 @@ class TaskSchema(BaseModel):
 @app.post("/reset", response_model=ResetResponse)
 async def reset_environment(request: dict = Body(default={})):
     """Reset the environment and start a new episode for a specific task."""
+    global last_reset_task_id
     try:
         # Safely extract task_id from dictionary, default to 1
         raw_task_id = request.get("task_id", 1)
@@ -269,6 +273,9 @@ async def reset_environment(request: dict = Body(default={})):
             task_id = int(raw_task_id) if raw_task_id else 1
         except (ValueError, TypeError):
             task_id = 1
+        
+        # Update global tracking for /state endpoint
+        last_reset_task_id = task_id
             
         # [START] task=... env=sql-investigation-env model=sql-agent
         print(f"[START] task={task_id} env=sql-investigation-env model=sql-agent")
@@ -367,15 +374,11 @@ async def step_environment(request: dict = Body(default={})):
 @app.get("/state", response_model=SQLState)
 async def get_state():
     """Get the current state of the environment."""
+    global last_reset_task_id
     try:
-        # Return state from the most recently used environment
-        # Default to task 1 if no environment exists
-        if 1 in task_environments:
-            return task_environments[1].state()
-        else:
-            # Create a fresh environment for task 1
-            environment = get_or_create_environment(1)
-            return environment.state()
+        # Return state from the last reset task
+        environment = get_or_create_environment(last_reset_task_id)
+        return environment.state()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
