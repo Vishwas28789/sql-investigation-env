@@ -1,14 +1,16 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 
 
 class SQLAction(BaseModel):
     """Represents an SQL action taken by the agent."""
+    model_config = ConfigDict(validate_assignment=True)
     query: str = ""
     task_id: int = 0
 
 
 class SQLObservation(BaseModel):
     """Represents the observation returned from executing an SQL action."""
+    model_config = ConfigDict(validate_assignment=True)
     schema_info: str = ""
     business_question: str = ""
     query_result: str = ""
@@ -32,6 +34,7 @@ class SQLObservation(BaseModel):
 
 class SQLState(BaseModel):
     """Represents the current state of the SQL investigation environment."""
+    model_config = ConfigDict(validate_assignment=True)
     episode_id: str = ""
     step_count: int = 0
     task_id: int = 0

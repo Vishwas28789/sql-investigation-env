@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Optional, Dict, Any
 
 from models import SQLAction, SQLObservation, SQLState
@@ -134,6 +134,7 @@ class GraderRequest(BaseModel):
 
 
 class GraderResponse(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     score: float
     feedback: str
     
@@ -157,6 +158,7 @@ class GraderResponse(BaseModel):
 
 
 class ResetResponse(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     schema_info: str
     business_question: str
     query_result: str
@@ -187,6 +189,7 @@ class ResetResponse(BaseModel):
 
 
 class StepResponse(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     observation: SQLObservation
     reward: float
     done: bool
@@ -215,6 +218,7 @@ class StepResponse(BaseModel):
 
 
 class BaselineResponse(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     task_1: float
     task_2: float
     task_3: float
