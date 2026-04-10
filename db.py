@@ -448,3 +448,25 @@ class DatabaseManager(ABC):
         
         # Recreate tables and insert fresh data
         self.setup_ecommerce_db()
+
+    def reset_with_schema(self, schema_sql: str):
+        """
+        Reset the database with a custom schema.
+        
+        Args:
+            schema_sql: SQL schema definition string (typically CREATE TABLE statements)
+        """
+        # Close existing connection if any
+        if self.conn:
+            self.conn.close()
+        
+        # Create a new in-memory SQLite DB
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        
+        # Execute the provided schema SQL using executescript
+        cursor = self.conn.cursor()
+        cursor.executescript(schema_sql)
+        
+        # Commit changes
+        self.conn.commit()

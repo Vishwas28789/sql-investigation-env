@@ -17,7 +17,7 @@ from typing import Optional, Dict, Any
 from models import SQLAction, SQLObservation, SQLState
 from environment import SQLInvestigationEnvironment
 from tasks import TASKS, get_task
-from grader import Grader
+from grader import Grader, evaluate_query
 from db import DatabaseManager
 
 
@@ -193,6 +193,20 @@ class StepResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class QuickTestRequest(BaseModel):
+    schema_sql: str
+    expected_sql: str
+    generated_sql: str
+
+
+class QuickTestResponse(BaseModel):
+    score: float
+    status: str
+    expected: list
+    actual: list
+    error: Optional[str] = None
 
 
 # Endpoints
@@ -410,6 +424,43 @@ async def run_baseline():
 async def health_check():
     """Health check endpoint."""
     return HealthResponse(status="ok")
+
+
+@app.post("/quick_test", response_model=QuickTestResponse)
+async def quick_test(request: QuickTestRequest):
+    """
+    Quick test endpoint for dynamic schema testing.
+    
+    Accepts a schema definition, expected SQL query, and generated SQL query.
+    Creates a temporary database with the schema, executes both queries,
+    and returns comparison results.
+    """
+    try:
+        # Create a fresh DatabaseManager instance with empty schema
+        db_instance = DatabaseManager(task_id=1)
+        
+        # Reset with the provided schema
+        db_instance.reset_with_schema(request.schema_sql)
+        
+        # Evaluate the generated query against the expected query
+        result = evaluate_query(
+            db_instance,
+            request.expected_sql,
+            request.generated_sql
+        )
+        
+        # Return the result
+        return QuickTestResponse(
+            score=result.get("score", 0.0),
+            status=result.get("status", "fail"),
+            expected=result.get("expected", []),
+            actual=result.get("actual", []),
+            error=result.get("error", None)
+        )
+    
+    except Exception as e:
+        print(f"[ERROR /quick_test] {str(e)}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def main():

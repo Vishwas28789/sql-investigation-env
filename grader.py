@@ -293,3 +293,65 @@ class Grader:
             else:
                 return "✗ Query produced incorrect results. Review logic carefully."
 
+
+def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
+    """
+    Evaluate a generated SQL query against an expected query.
+    
+    Args:
+        db: DatabaseManager instance with execute_query() method
+        expected_sql: SQL query representing the expected result
+        generated_sql: SQL query generated/submitted for evaluation
+        
+    Returns:
+        Dictionary with keys:
+        - score: Float between 0.0 and 1.0
+        - status: "pass" or "fail" 
+        - expected: List of expected results
+        - actual: List of actual results from generated query
+    """
+    # Execute expected query
+    expected_rows, expected_error = db.execute_query(expected_sql)
+    
+    # If expected query fails, return error
+    if expected_error:
+        return {
+            "score": 0.0,
+            "status": "fail",
+            "expected": [],
+            "actual": [],
+            "error": f"Expected query failed: {expected_error}"
+        }
+    
+    # Execute generated query
+    generated_rows, generated_error = db.execute_query(generated_sql)
+    
+    # If generated query fails, return error
+    if generated_error:
+        return {
+            "score": 0.0,
+            "status": "fail",
+            "expected": [list(row) if hasattr(row, 'keys') else row for row in expected_rows],
+            "actual": [],
+            "error": f"Generated query failed: {generated_error}"
+        }
+    
+    # Convert rows to comparable format (lists)
+    expected_data = [list(row) if hasattr(row, 'keys') else row for row in expected_rows]
+    actual_data = [list(row) if hasattr(row, 'keys') else row for row in generated_rows]
+    
+    # Compare results
+    if expected_data == actual_data:
+        score = 1.0
+        status = "pass"
+    else:
+        score = 0.0
+        status = "fail"
+    
+    return {
+        "score": score,
+        "status": status,
+        "expected": expected_data,
+        "actual": actual_data
+    }
+
