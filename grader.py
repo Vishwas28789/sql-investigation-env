@@ -18,26 +18,12 @@ from tasks import get_task
 from typing import List, Tuple, Set
 
 
-def clamp_score(x):
-    """Clamp score to strictly between 0.01 and 0.99."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return max(0.01, min(0.99, x))
-
-
-def safe_score(x):
-    """Force score to safe range (0.01-0.99), never 0.0 or 1.0."""
-    try:
-        x = float(x)
-    except:
-        x = 0.25
-    if x <= 0.0:
-        return 0.01
-    if x >= 1.0:
-        return 0.99
-    return x
+def safe_score(raw_score: float) -> float:
+    if raw_score <= 0.0:
+        return 0.1
+    elif raw_score >= 1.0:
+        return 0.9
+    return round(raw_score, 4)
 
 
 class Grader:
@@ -136,10 +122,7 @@ class Grader:
             score = 0.01
 
         # ========== STRICT OPENENV BOUNDING (0, 1) ==========
-        # Apply TRIPLE safeguard: clamp_score -> safe_score -> max/min
-        score = clamp_score(score)
         score = safe_score(score)
-        score = max(0.01, min(0.99, float(score or 0.25)))
         print(f"[GRADER] FINAL CLAMPED SCORE: {score}")
         return score
     
@@ -316,7 +299,7 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
     # If expected query fails, return error
     if expected_error:
         return {
-            "score": 0.0,
+            "score": safe_score(0.0),
             "status": "fail",
             "expected": [],
             "actual": [],
@@ -329,7 +312,7 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
     # If generated query fails, return error
     if generated_error:
         return {
-            "score": 0.0,
+            "score": safe_score(0.0),
             "status": "fail",
             "expected": [list(row) if hasattr(row, 'keys') else row for row in expected_rows],
             "actual": [],
@@ -349,7 +332,7 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
         status = "fail"
     
     return {
-        "score": score,
+        "score": safe_score(score),
         "status": status,
         "expected": expected_data,
         "actual": actual_data

@@ -21,26 +21,12 @@ from grader import Grader, evaluate_query
 from db import DatabaseManager
 
 
-def clamp_score(x):
-    """Clamp score to strictly between 0.01 and 0.99."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return max(0.01, min(0.99, x))
-
-
-def safe_score(x):
-    """Force score to safe range (0.01-0.99), never 0.0 or 1.0."""
-    try:
-        x = float(x)
-    except:
-        x = 0.25
-    if x <= 0.0:
-        return 0.01
-    if x >= 1.0:
-        return 0.99
-    return x
+def safe_score(raw_score: float) -> float:
+    if raw_score <= 0.0:
+        return 0.1
+    elif raw_score >= 1.0:
+        return 0.9
+    return round(raw_score, 4)
 
 
 # Initialize per-task environments
@@ -234,9 +220,7 @@ async def reset_environment(request: dict = Body(default={})):
         observation = environment.reset(task_id=task_id)
         
         # CRITICAL: Ensure reward is always 0.5, clamped to valid range
-        safe_reward = clamp_score(0.5)
-        safe_reward = safe_score(safe_reward)  # TRIPLE safety
-        safe_reward = max(0.01, min(0.99, float(safe_reward or 0.25)))
+        safe_reward = safe_score(0.5)
         
         # Use response_model=ResetResponse to enforce Pydantic validation
         return ResetResponse(
@@ -276,7 +260,7 @@ async def step_environment(request: dict = Body(default={})):
         observation, _, _, info = environment.step(action)
         
         # CRITICAL: Clamp reward in observation object itself
-        observation.reward = clamp_score(observation.reward)
+        observation.reward = safe_score(observation.reward)
         
         # [STEP] step=... action=... reward=... done=... error=...
         def get_attr(obj, attr, default=None):
@@ -292,9 +276,7 @@ async def step_environment(request: dict = Body(default={})):
         done_str = "true" if done_val else "false"
         
         # CRITICAL: Clamp reward strictly between 0.01 and 0.99 before returning
-        reward_val = clamp_score(reward_val)
-        reward_val = safe_score(reward_val)  # TRIPLE safety
-        reward_val = max(0.01, min(0.99, float(reward_val or 0.25)))
+        reward_val = safe_score(reward_val)
         
         # CRITICAL: Also clamp observation reward inline
         observation.reward = safe_score(max(0.01, min(0.99, float(observation.reward or 0.25))))

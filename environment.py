@@ -10,26 +10,12 @@ from tasks import TASKS, get_task
 from grader import Grader
 
 
-def clamp_score(x):
-    """Clamp score to strictly between 0.01 and 0.99."""
-    try:
-        x = float(x)
-    except (ValueError, TypeError):
-        x = 0.25
-    return max(0.01, min(0.99, x))
-
-
-def safe_score(x):
-    """Force score to safe range (0.01-0.99), never 0.0 or 1.0."""
-    try:
-        x = float(x)
-    except:
-        x = 0.25
-    if x <= 0.0:
-        return 0.01
-    if x >= 1.0:
-        return 0.99
-    return x
+def safe_score(raw_score: float) -> float:
+    if raw_score <= 0.0:
+        return 0.1
+    elif raw_score >= 1.0:
+        return 0.9
+    return round(raw_score, 4)
 
 
 class SQLInvestigationEnvironment:
@@ -159,10 +145,8 @@ class SQLInvestigationEnvironment:
         result_str = self._format_query_result(query_result)
         
         # Calculate reward: Apply TRIPLE safety wrapper
-        # score -> clamp_score -> safe_score -> max/min
-        reward = clamp_score(score)
-        reward = safe_score(reward)
-        reward = max(0.01, min(0.99, float(reward or 0.25)))
+        # score -> safe_score
+        reward = safe_score(score)
         
         # Determine if episode is done
         if score >= 0.9 or self.step_count >= self.max_steps:

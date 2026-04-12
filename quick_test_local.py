@@ -59,9 +59,9 @@ def test_case_1_correct_query():
     print(f"  Actual Data: {result['actual']}")
     
     # Verify result
-    assert result['score'] == 1.0, f"Expected score 1.0, got {result['score']}"
+    assert result['score'] == 0.9, f"Expected score 0.9, got {result['score']}"
     assert result['status'] == "pass", f"Expected status 'pass', got {result['status']}"
-    print("\n✓ TEST PASSED: Score = 1.0")
+    print("\n✓ TEST PASSED: Score = 0.9")
     return result
 
 
@@ -110,9 +110,9 @@ def test_case_2_incorrect_query():
     print(f"  Actual Data: {result['actual']}")
     
     # Verify result
-    assert result['score'] == 0.0, f"Expected score 0.0, got {result['score']}"
+    assert result['score'] == 0.1, f"Expected score 0.1, got {result['score']}"
     assert result['status'] == "fail", f"Expected status 'fail', got {result['status']}"
-    print("\n✓ TEST PASSED: Score = 0.0 (incorrect query detected)")
+    print("\n✓ TEST PASSED: Score = 0.1 (incorrect query detected)")
     return result
 
 
@@ -161,9 +161,9 @@ def test_case_3_aggregation_query():
     print(f"  Actual Data: {result['actual']}")
     
     # Verify result
-    assert result['score'] == 1.0, f"Expected score 1.0, got {result['score']}"
+    assert result['score'] == 0.9, f"Expected score 0.9, got {result['score']}"
     assert result['status'] == "pass", f"Expected status 'pass', got {result['status']}"
-    print("\n✓ TEST PASSED: Aggregation query correct (Score = 1.0)")
+    print("\n✓ TEST PASSED: Aggregation query correct (Score = 0.9)")
     return result
 
 
@@ -207,10 +207,10 @@ def test_case_4_query_error():
     print(f"  Error: {result.get('error', 'None')}")
     
     # Verify result
-    assert result['score'] == 0.0, f"Expected score 0.0, got {result['score']}"
+    assert result['score'] == 0.1, f"Expected score 0.1, got {result['score']}"
     assert result['status'] == "fail", f"Expected status 'fail', got {result['status']}"
     assert result.get('error') is not None, "Expected error message"
-    print("\n✓ TEST PASSED: Syntax error detected (Score = 0.0)")
+    print("\n✓ TEST PASSED: Syntax error detected (Score = 0.1)")
     return result
 
 
@@ -238,10 +238,10 @@ def main():
         print("TEST SUMMARY")
         print("="*70)
         print("\n✓ All 4 test cases PASSED!")
-        print(f"\n  Test 1 (Correct Query):     Score = {result1['score']} (Expected: 1.0)")
-        print(f"  Test 2 (Incorrect Query):   Score = {result2['score']} (Expected: 0.0)")
-        print(f"  Test 3 (Aggregation Query): Score = {result3['score']} (Expected: 1.0)")
-        print(f"  Test 4 (Query Error):       Score = {result4['score']} (Expected: 0.0)")
+        print(f"\n  Test 1 (Correct Query):     Score = {result1['score']} (Expected: 0.9)")
+        print(f"  Test 2 (Incorrect Query):   Score = {result2['score']} (Expected: 0.1)")
+        print(f"  Test 3 (Aggregation Query): Score = {result3['score']} (Expected: 0.9)")
+        print(f"  Test 4 (Query Error):       Score = {result4['score']} (Expected: 0.1)")
         print("\n" + "="*70)
         print("✅ ALL TESTS COMPLETED SUCCESSFULLY!")
         print("="*70 + "\n")
