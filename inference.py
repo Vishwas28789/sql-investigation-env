@@ -34,11 +34,11 @@ client = OpenAI(
 
 ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
 
-# Task name mapping
+# Task name mapping — must match openenv.yaml task names
 TASK_NAMES = {
-    1: "Find the total number of orders per country",
-    2: "Calculate total spending by each customer",
-    3: "Identify products by category with high orders"
+    1: "Syntax Repair",
+    2: "Logic Fix",
+    3: "Business Investigation"
 }
 
 
@@ -128,7 +128,7 @@ def clamp_score(x):
     return max(0.01, min(0.99, x))
 
 def force_safe(x):
-    return str(clamp_score(x))
+    return f"{clamp_score(x):.2f}"
 
 
 def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, Optional[dict], str]:
@@ -368,8 +368,9 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         # format rewards list
         rewards_str = ",".join([force_safe(r) for r in rewards_list])
         
-        # Output: [END] success=<bool> steps=<n> rewards=<list>
-        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
+        # Output: [END] success=<bool> steps=<n> score=<score> rewards=<list>
+        score_str = force_safe(final_reward)
+        print(f"[END] success={success_str} steps={step_count} score={score_str} rewards={rewards_str}")
 
 
 # ============ ENTRY POINT ============
@@ -401,9 +402,17 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Run inference
-    run_inference(
-        task_id=args.task_id,
-        max_steps=args.max_steps,
-        num_episodes=args.episodes
-    )
+    # Run inference — if no specific task-id, run ALL three tasks
+    if args.task_id is not None:
+        run_inference(
+            task_id=args.task_id,
+            max_steps=args.max_steps,
+            num_episodes=args.episodes
+        )
+    else:
+        for tid in [1, 2, 3]:
+            run_inference(
+                task_id=tid,
+                max_steps=args.max_steps,
+                num_episodes=args.episodes
+            )

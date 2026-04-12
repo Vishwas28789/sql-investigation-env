@@ -280,14 +280,37 @@ async def get_tasks():
 
 @app.post("/grader")
 async def grade_query(request: dict = Body(default={})):
-    """Grade a SQL query for a specific task."""
+    """Grade a SQL query for a specific task.
+    
+    Handles multiple payload formats:
+      - {"query": "...", "task_id": 1}           (direct)
+      - {"action": {"query": "...", "task_id": 1}} (nested)
+      - {"task_id": 1}                            (no query — uses broken_query)
+    """
     try:
-        query = str(request.get("query", "SELECT 1"))
-        task_id = int(request.get("task_id", 1))
+        # Extract task_id from multiple possible locations
+        task_id = request.get("task_id")
+        if task_id is None and isinstance(request.get("action"), dict):
+            task_id = request["action"].get("task_id")
+        try:
+            task_id = int(task_id) if task_id is not None else 1
+        except (ValueError, TypeError):
+            task_id = 1
+        
+        # Extract query from multiple possible locations
+        query = request.get("query")
+        if not query and isinstance(request.get("action"), dict):
+            query = request["action"].get("query")
+        if not query:
+            # Fallback: use broken query from task definition
+            t = get_task(task_id)
+            query = t.get("broken_query", "SELECT 1") if t else "SELECT 1"
+        query = str(query)
         
         task = get_task(task_id)
         if not task:
-            return {"score": 0.25, "feedback": "Task not found"}
+            safe = clamp_score(0.25)
+            return {"score": safe, "reward": safe, "feedback": "Task not found", "task_id": task_id}
         
         environment = get_or_create_environment(task_id)
         
@@ -300,10 +323,11 @@ async def grade_query(request: dict = Body(default={})):
         score = clamp_score(score)
         
         feedback = grader.get_feedback(score, "")
-        return {"score": score, "feedback": feedback}
+        return {"score": score, "reward": score, "feedback": feedback, "task_id": task_id}
     except Exception as e:
         print(f"[ERROR /grader] {e}", file=sys.stderr)
-        return {"score": 0.25, "feedback": "Error during grading"}
+        safe = clamp_score(0.25)
+        return {"score": safe, "reward": safe, "feedback": "Error during grading", "task_id": 0}
 
 
 @app.post("/baseline")
