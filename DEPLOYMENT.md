@@ -19,7 +19,7 @@
 1. Go to [huggingface.co/spaces](https://huggingface.co/spaces)
 2. Click **"Create new Space"**
 3. Fill in details:
-   - **Space name**: `sql-evaluation-layer`
+   - **Space name**: `sql-investigation-env`
    - **License**: `openrail` (or your choice)
    - **SDK**: **Docker** ⚠️ (IMPORTANT - not Gradio)
    - **Visibility**: Public
@@ -28,8 +28,8 @@
 ### Step 2: Clone Space Repository
 
 ```bash
-git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
-cd sql-evaluation-layer
+git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
+cd sql-investigation-env
 ```
 
 ### Step 3: Copy Project Files
@@ -83,7 +83,7 @@ git push
 Once running, your app will be available at:
 
 ```
-https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
+https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
 ```
 
 ---

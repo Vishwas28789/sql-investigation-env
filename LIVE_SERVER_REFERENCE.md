@@ -215,8 +215,8 @@ CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
 
 ### Build & Run (locally)
 ```bash
-docker build -t sql-evaluation-layer .
-docker run -p 7860:7860 sql-evaluation-layer
+docker build -t sql-investigation-env .
+docker run -p 7860:7860 sql-investigation-env
 ```
 
 ### On Hugging Face Spaces
@@ -250,13 +250,13 @@ docker run -p 7860:7860 sql-evaluation-layer
 Go to: https://huggingface.co/spaces
 Create new Space
 SDK: Docker (important!)
-Name: sql-evaluation-layer
+Name: sql-investigation-env
 ```
 
 ### 2. Clone Space
 ```bash
-git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
-cd sql-evaluation-layer
+git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
+cd sql-investigation-env
 ```
 
 ### 3. Copy Files
@@ -277,7 +277,7 @@ git push
 
 ### 6. Access
 ```
-https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
+https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
 ```
 
 ---
@@ -318,7 +318,7 @@ https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
 **Guide**: See DEPLOYMENT.md  
 
 **When Live on HF**:  
-**Your URL**: https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
+**Your URL**: https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
 
 ---
 

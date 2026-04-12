@@ -76,13 +76,13 @@ Result: ✅ **ALL TESTS PASSED**
 1. **Create Space on HF**
    - Go to huggingface.co/spaces
    - Click "Create new Space"
-   - Name: `sql-evaluation-layer`
+   - Name: `sql-investigation-env`
    - SDK: **Docker** (IMPORTANT)
 
 2. **Clone Space Repo**
    ```bash
-   git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
-   cd sql-evaluation-layer
+   git clone https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
+   cd sql-investigation-env
    ```
 
 3. **Copy All Files**
@@ -103,7 +103,7 @@ Result: ✅ **ALL TESTS PASSED**
 
 ### After Deployment - Live URL:
 ```
-https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
+https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
 ```
 
 ---
@@ -264,7 +264,7 @@ Response:
 **Health**: http://localhost:7860/health  
 
 **When Deployed**:  
-**Live URL**: https://huggingface.co/spaces/YOUR_USERNAME/sql-evaluation-layer
+**Live URL**: https://huggingface.co/spaces/YOUR_USERNAME/sql-investigation-env
 
 ---
 
