@@ -1,5 +1,12 @@
 from pydantic import BaseModel, field_validator, ConfigDict
 
+def clamp_score(x):
+    try:
+        x = float(x)
+    except:
+        x = 0.25
+    return max(0.01, min(0.99, x))
+
 
 class SQLAction(BaseModel):
     """Represents an SQL action taken by the agent."""
@@ -23,13 +30,7 @@ class SQLObservation(BaseModel):
     @classmethod
     def validate_reward(cls, v):
         """Ensure reward is ALWAYS strictly between 0.01 and 0.99."""
-        v = float(v)
-        # Auto-fix out-of-range values
-        if v <= 0.0:
-            return 0.01
-        if v >= 1.0:
-            return 0.99
-        return max(0.01, min(0.99, v))
+        return clamp_score(v)
 
 
 class SQLState(BaseModel):

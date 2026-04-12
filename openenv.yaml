@@ -46,16 +46,30 @@ observation_space:
 
 tasks:
   - id: 1
-    difficulty: easy
-    name: "Syntax Repair"
-    description: "Fix a syntax error in a query that groups orders by country"
+    description: Fix SQL query grouping by country
+    grader:
+      type: llm
+      prompt_template: |
+        Evaluate the SQL query result correctness.
+        Return ONLY a float score strictly between 0 and 1 (NOT 0.0 or 1.0).
+        Never return exactly 0 or 1.
+
   - id: 2
-    difficulty: medium
-    name: "Logic Fix"
-    description: "Fix a JOIN condition error that prevents correct customer spending calculation"
+    description: Fix JOIN condition for customer spending
+    grader:
+      type: llm
+      prompt_template: |
+        Evaluate the SQL query result correctness.
+        Return ONLY a float score strictly between 0 and 1 (NOT 0.0 or 1.0).
+        Never return exactly 0 or 1.
+
   - id: 3
-    difficulty: hard
-    name: "Business Investigation"
-    description: "Fix GROUP BY scope and add missing filter conditions for category-level analysis"
+    description: Fix aggregation and filtering logic
+    grader:
+      type: llm
+      prompt_template: |
+        Evaluate the SQL query result correctness.
+        Return ONLY a float score strictly between 0 and 1 (NOT 0.0 or 1.0).
+        Never return exactly 0 or 1.
 
 entrypoint: "uvicorn server.app:app --host 0.0.0.0 --port 7860"

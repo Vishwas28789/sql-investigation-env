@@ -18,12 +18,12 @@ from tasks import get_task
 from typing import List, Tuple, Set
 
 
-def safe_score(raw_score: float) -> float:
-    if raw_score <= 0.0:
-        return 0.1
-    elif raw_score >= 1.0:
-        return 0.9
-    return round(raw_score, 4)
+def clamp_score(x):
+    try:
+        x = float(x)
+    except:
+        x = 0.25
+    return max(0.01, min(0.99, x))
 
 
 class Grader:
@@ -122,7 +122,7 @@ class Grader:
             score = 0.01
 
         # ========== STRICT OPENENV BOUNDING (0, 1) ==========
-        score = safe_score(score)
+        score = clamp_score(score)
         print(f"[GRADER] FINAL CLAMPED SCORE: {score}")
         return score
     
@@ -299,7 +299,7 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
     # If expected query fails, return error
     if expected_error:
         return {
-            "score": safe_score(0.0),
+            "score": clamp_score(0.01),
             "status": "fail",
             "expected": [],
             "actual": [],
@@ -312,7 +312,7 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
     # If generated query fails, return error
     if generated_error:
         return {
-            "score": safe_score(0.0),
+            "score": clamp_score(0.01),
             "status": "fail",
             "expected": [list(row) if hasattr(row, 'keys') else row for row in expected_rows],
             "actual": [],
@@ -325,14 +325,14 @@ def evaluate_query(db, expected_sql: str, generated_sql: str) -> dict:
     
     # Compare results
     if expected_data == actual_data:
-        score = 1.0
+        score = 0.99
         status = "pass"
     else:
-        score = 0.0
+        score = 0.01
         status = "fail"
     
     return {
-        "score": safe_score(score),
+        "score": clamp_score(score),
         "status": status,
         "expected": expected_data,
         "actual": actual_data

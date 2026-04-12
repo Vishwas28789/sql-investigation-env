@@ -21,12 +21,12 @@ from grader import Grader, evaluate_query
 from db import DatabaseManager
 
 
-def safe_score(raw_score: float) -> float:
-    if raw_score <= 0.0:
-        return 0.1
-    elif raw_score >= 1.0:
-        return 0.9
-    return round(raw_score, 4)
+def clamp_score(x):
+    try:
+        x = float(x)
+    except:
+        x = 0.25
+    return max(0.01, min(0.99, x))
 
 
 # Initialize per-task environments
@@ -45,42 +45,14 @@ def get_or_create_environment(task_id: int) -> SQLInvestigationEnvironment:
 
 grader = Grader()
 
-# Custom JSON encoder to force score boundaries at serialization
-from json import JSONEncoder
-from fastapi.responses import JSONResponse
-
-class SafeScoreEncoder(JSONEncoder):
-    """JSON encoder that forces all scores to be strictly in (0, 1)."""
-    def encode(self, o):
-        result = super().encode(o)
-        # Extra safety: scan for 0.0 and 1.0 in JSON output and convert them
-        # This prevents any floating-point edge cases
-        result = result.replace('"reward": 0.0,', '"reward": 0.01,')
-        result = result.replace('"reward": 1.0,', '"reward": 0.99,')
-        result = result.replace('"reward": 0.0}', '"reward": 0.01}')
-        result = result.replace('"reward": 1.0}', '"reward": 0.99}')
-        result = result.replace('"score": 0.0,', '"score": 0.01,')
-        result = result.replace('"score": 1.0,', '"score": 0.99,')
-        result = result.replace('"score": 0.0}', '"score": 0.01}')
-        result = result.replace('"score": 1.0}', '"score": 0.99}')
-        result = result.replace('"task_1": 0.0,', '"task_1": 0.01,')
-        result = result.replace('"task_1": 1.0,', '"task_1": 0.99,')
-        result = result.replace('"task_2": 0.0,', '"task_2": 0.01,')
-        result = result.replace('"task_2": 1.0,', '"task_2": 0.99,')
-        result = result.replace('"task_3": 0.0,', '"task_3": 0.01,')
-        result = result.replace('"task_3": 1.0,', '"task_3": 0.99,')
-        result = result.replace('"average": 0.0,', '"average": 0.01,')
-        result = result.replace('"average": 1.0,', '"average": 0.99,')
-        result = result.replace('"average": 0.0}', '"average": 0.01}')
-        result = result.replace('"average": 1.0}', '"average": 0.99}')
-        return result
+# Removed SafeScoreEncoder as we use clamp_score exclusively
 
 # Create FastAPI app
 app = FastAPI(
     title="SQL Investigation OpenEnv",
     description="Environment for SQL query debugging and optimization",
     version="1.0.0",
-    json_encoders={float: lambda v: max(0.01, min(0.99, float(v)))}  # Force all floats to valid range
+    json_encoders={float: lambda v: clamp_score(v)}  # Force all floats to valid range
 )
 
 # Add CORS middleware
@@ -132,20 +104,7 @@ class ResetResponse(BaseModel):
     @field_validator('reward')
     @classmethod
     def validate_reward(cls, v):
-        """Ensure reward is ALWAYS strictly between 0.01 and 0.99."""
-        v = float(v)
-        if v <= 0.0:
-            return 0.01
-        if v >= 1.0:
-            return 0.99
-        return max(0.01, min(0.99, v))
-    
-    @model_validator(mode='after')
-    def final_reward_check(self):
-        """Final check: ensure reward never escaped validation"""
-        if self.reward <= 0.0 or self.reward >= 1.0:
-            self.reward = 0.5
-        return self
+        return clamp_score(v)
 
 
 class StepResponse(BaseModel):
@@ -158,23 +117,7 @@ class StepResponse(BaseModel):
     @field_validator('reward')
     @classmethod
     def validate_reward(cls, v):
-        """Ensure reward is ALWAYS strictly between 0.01 and 0.99."""
-        v = float(v)
-        if v <= 0.0:
-            return 0.01
-        if v >= 1.0:
-            return 0.99
-        return max(0.01, min(0.99, v))
-    
-    @model_validator(mode='after')
-    def final_reward_check(self):
-        """Final check: ensure all rewards are valid"""
-        if self.reward <= 0.0 or self.reward >= 1.0:
-            self.reward = 0.25
-        # Also check observation reward
-        if self.observation and (self.observation.reward <= 0.0 or self.observation.reward >= 1.0):
-            self.observation.reward = 0.25
-        return self
+        return clamp_score(v)
 
 
 class HealthResponse(BaseModel):
@@ -219,8 +162,8 @@ async def reset_environment(request: dict = Body(default={})):
         # Reset the environment for this specific task
         observation = environment.reset(task_id=task_id)
         
-        # CRITICAL: Ensure reward is always 0.5, clamped to valid range
-        safe_reward = safe_score(0.5)
+        # CRITICAL: Ensure reward is always clamped 0.5
+        safe_reward = clamp_score(0.5)
         
         # Use response_model=ResetResponse to enforce Pydantic validation
         return ResetResponse(
@@ -260,7 +203,7 @@ async def step_environment(request: dict = Body(default={})):
         observation, _, _, info = environment.step(action)
         
         # CRITICAL: Clamp reward in observation object itself
-        observation.reward = safe_score(observation.reward)
+        observation.reward = clamp_score(observation.reward)
         
         # [STEP] step=... action=... reward=... done=... error=...
         def get_attr(obj, attr, default=None):
@@ -276,10 +219,10 @@ async def step_environment(request: dict = Body(default={})):
         done_str = "true" if done_val else "false"
         
         # CRITICAL: Clamp reward strictly between 0.01 and 0.99 before returning
-        reward_val = safe_score(reward_val)
+        reward_val = clamp_score(reward_val)
         
         # CRITICAL: Also clamp observation reward inline
-        observation.reward = safe_score(max(0.01, min(0.99, float(observation.reward or 0.25))))
+        observation.reward = clamp_score(getattr(observation, "reward", 0.25))
         
         action_display = query[:50] if query else ""
         print(f"[STEP] step={info['step']} action=\"{action_display}\" reward={reward_val:.4f} done={done_str} error={error_str}")
@@ -291,7 +234,7 @@ async def step_environment(request: dict = Body(default={})):
         # Return observation with all fields including reward, done, feedback
         return StepResponse(
             observation=observation,
-            reward=safe_score(max(0.01, min(0.99, float(reward_val or 0.25)))),
+            reward=clamp_score(reward_val),
             done=done_val,
             info=info
         )
@@ -354,13 +297,7 @@ async def grade_query(request: dict = Body(default={})):
             print(f"Grader error: {e}", file=sys.stderr)
             score = 0.25
         
-        # Force strictly between 0 and 1
-        score = float(score) if score else 0.25
-        if score <= 0.0:
-            score = 0.01
-        if score >= 1.0:
-            score = 0.99
-        score = max(0.01, min(0.99, score))
+        score = clamp_score(score)
         
         feedback = grader.get_feedback(score, "")
         return {"score": score, "feedback": feedback}
@@ -386,16 +323,10 @@ async def run_baseline():
             except Exception:
                 score = 0.25
             
-            score = float(score) if score else 0.25
-            if score <= 0.0:
-                score = 0.01
-            if score >= 1.0:
-                score = 0.99
-            score = max(0.01, min(0.99, score))
+            score = clamp_score(score)
             scores[f"task_{task_id}"] = score
         
-        avg = sum(scores.values()) / len(scores)
-        avg = max(0.01, min(0.99, avg))
+        avg = clamp_score(sum(scores.values()) / len(scores))
         scores["average"] = avg
         return scores
     except Exception as e:
@@ -433,7 +364,7 @@ async def quick_test(request: QuickTestRequest):
         
         # Return the result
         return QuickTestResponse(
-            score=result.get("score", 0.0),
+            score=clamp_score(result.get("score", 0.25)),
             status=result.get("status", "fail"),
             expected=result.get("expected", []),
             actual=result.get("actual", []),

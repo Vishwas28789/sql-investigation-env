@@ -120,12 +120,15 @@ def clean_error(error_str: str, max_length: int = 150) -> str:
         return "null"
 
 
-def format_reward(reward: float) -> str:
-    """Format reward to 2 decimal places."""
+def clamp_score(x):
     try:
-        return f"{float(reward):.2f}"
-    except (ValueError, TypeError):
-        return "0.25"
+        x = float(x)
+    except:
+        x = 0.25
+    return max(0.01, min(0.99, x))
+
+def force_safe(x):
+    return str(clamp_score(x))
 
 
 def http_request(method: str, endpoint: str, data: dict = None) -> Tuple[bool, Optional[dict], str]:
@@ -294,8 +297,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
                 print(f"[DEBUG] Query generation failed, emitting zero-reward step", file=sys.stderr)
                 action_clean = "[QUERY_GENERATION_FAILED]"
                 step_count = step_idx + 1
-                rewards_list.append(0.00)
-                reward_str = format_reward(0.00)
+                rewards_list.append(0.01)
+                reward_str = force_safe(0.01)
                 print(f"[STEP] step={step_count} action={action_clean} reward={reward_str} done=false error=query_generation_failed")
                 break
             
@@ -349,7 +352,7 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
             
             # Output: [STEP] step=<n> action=<str> reward=0.25 done=<bool> error=<str|null>
             done_str = "true" if done else "false"
-            reward_str = format_reward(step_reward)
+            reward_str = force_safe(step_reward)
             print(f"[STEP] step={step_count} action={action_clean} reward={reward_str} done={done_str} error={obs_error}")
             
             # End if done
@@ -362,9 +365,8 @@ def run_inference(task_id: Optional[int] = None, max_steps: int = 10, num_episod
         success_bool = final_reward >= 0.5
         success_str = "true" if success_bool else "false"
         
-        # Format rewards list: r1,r2,r3 using simple f"{r:.2f}" format
-        rewards_formatted = [format_reward(r) for r in rewards_list]
-        rewards_str = ",".join(rewards_formatted)
+        # format rewards list
+        rewards_str = ",".join([force_safe(r) for r in rewards_list])
         
         # Output: [END] success=<bool> steps=<n> rewards=<list>
         print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
